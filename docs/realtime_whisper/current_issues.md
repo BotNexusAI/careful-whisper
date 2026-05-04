@@ -11,9 +11,10 @@ The Rust/Tauri realtime prototype is wired in, but it has not yet been tested
 through the actual app UI with microphone permission, the overlay window, and
 the final paste path together.
 
-Next action: run the app, enable **Realtime transcription** in Settings, record
-the English control paragraph from `poc/test_samples.md`, and compare overlay
-partials with the final batch transcript.
+Next action: run the app, enable **Realtime transcription** and **Auto-paste
+after transcription**, start from a focused text field with the global hotkey,
+record the English control paragraph from `poc/test_samples.md`, and compare
+overlay partials, live pasted chunks, and the final batch transcript.
 
 ### Continuous Runner Latency Is Still Noticeable
 
@@ -134,6 +135,20 @@ Resolution: `realtime_mic_poc.py` now defaults to continuous ffmpeg capture, and
 the Rust prototype reads from the active app capture buffer while recording. The
 remaining issue is latency, not dropped audio during transcription.
 
+### Tauri Dev Linker Failure With Optimized Incremental Builds
+
+`pnpm tauri dev` was failing at link time on macOS arm64 with undefined
+`_anon...llvm...` serde symbols, while normal `cargo check` still passed. The
+failing command was reproduced as:
+
+```sh
+cargo build --manifest-path src-tauri/Cargo.toml --no-default-features --features metal
+```
+
+Resolution: the same command linked cleanly with `CARGO_INCREMENTAL=0`, so
+`src-tauri/Cargo.toml` now sets `incremental = false` for the optimized dev
+profile.
+
 ### Duplicate Text Handling Is Unimplemented
 
 Overlapping windows are not active yet, so there is no duplicate-suffix or
@@ -141,13 +156,16 @@ stable-prefix logic. This will matter as soon as we add overlap.
 
 Next action: add overlap only after baseline chunk latency is measured.
 
-### Partial Vs Committed Output Is Undesigned
+### Realtime Commit Semantics Are Still Naive
 
-The app now displays realtime partials in the overlay, but realtime dictation
-still needs a rule for when text is stable enough to commit to another app.
-Replacing already pasted text is brittle across arbitrary desktop apps.
+The app now pastes realtime chunks into the captured hotkey target when
+**Auto-paste after transcription** is enabled. This validates the product path,
+but it commits whole chunk output directly. There is no overlap,
+duplicate-suffix handling, stable-prefix logic, or edit/replace strategy yet.
 
-Next action: keep Phase 3 app integration limited to overlay/log partial text.
+Next action: test naive chunk commits first. If words repeat or chunk boundaries
+feel rough, add overlap plus deduplication before trying any arbitrary-app
+replace behavior.
 
 ### VAD Is Deferred
 
@@ -162,5 +180,6 @@ The current batch path is simple and reliable. Realtime work landed as an
 opt-in settings flag and overlay-only partial text, not as a replacement for the
 existing stop-then-transcribe behavior.
 
-Resolution: batch mode remains the default fallback, and auto-paste still uses
-the final transcript after stop.
+Resolution: batch mode remains the default fallback. In realtime mode,
+auto-paste inserts live chunks during recording and the final transcript is
+copied to the clipboard without being pasted a second time.

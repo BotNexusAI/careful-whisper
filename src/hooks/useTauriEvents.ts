@@ -6,6 +6,7 @@ export type AppEvent =
   | { type: "recording-stopped" }
   | { type: "transcription-complete"; text: string }
   | { type: "realtime-transcription"; text: string; fullText: string }
+  | { type: "realtime-mode-updated"; armed: boolean; active: boolean }
   | { type: "transcription-error"; message: string }
   | { type: "download-progress"; model: string; percent: number }
   | { type: "hotkey-start" }
@@ -35,6 +36,13 @@ export function useTauriEvents(handler: Handler) {
             type: "realtime-transcription",
             text: e.payload.text,
             fullText: e.payload.full_text,
+          })
+        ),
+        listen<{ armed: boolean; active: boolean }>("realtime-mode-updated", (e) =>
+          onEvent({
+            type: "realtime-mode-updated",
+            armed: e.payload.armed,
+            active: e.payload.active,
           })
         ),
         listen<{ message: string }>("transcription-error", (e) =>

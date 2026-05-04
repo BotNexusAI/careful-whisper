@@ -94,9 +94,15 @@ the app menu with language and quit actions.
 
 ### Realtime transcription
 
-Enable **Realtime transcription** in Settings to show partial transcript text in the overlay while recording.
+Enable **Realtime transcription** in Settings to show partial transcript text in
+the overlay while recording. The recording bubble also shows the current mode
+and lets you arm or disable realtime mode while a recording is active.
 
-Realtime mode is useful for seeing whether the app is hearing you correctly before you stop recording. When you stop, the app still runs the full final transcription path and, if auto-paste is enabled, pastes the completed result into your focused app.
+When **Auto-paste after transcription** is also enabled, realtime chunks are
+pasted into the focused app during recording. When you stop, the app still runs
+the full final transcription path and copies the completed result to the
+clipboard, but it does not paste the final transcript a second time in realtime
+mode.
 
 ## Default Hotkey
 

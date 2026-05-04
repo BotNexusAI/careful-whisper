@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useTauriEvents } from "../hooks/useTauriEvents";
 
@@ -14,6 +15,8 @@ export function Overlay() {
   const [errorMsg, setErrorMsg] = useState("");
   const [partialText, setPartialText] = useState("");
   const [realtimeActive, setRealtimeActive] = useState(false);
+  const [realtimeArmed, setRealtimeArmed] = useState(false);
+  const [realtimeChanging, setRealtimeChanging] = useState(false);
   const [barHeights, setBarHeights] = useState<number[] | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const smoothedLevel = useRef(0);
@@ -25,11 +28,19 @@ export function Overlay() {
       setElapsed(0);
       setPartialText("");
       setRealtimeActive(event.realtime);
+      setRealtimeArmed(event.realtime);
     } else if (event.type === "recording-stopped") {
       setState("transcribing");
       setBarHeights(null);
     } else if (event.type === "realtime-transcription") {
       setPartialText(event.fullText);
+    } else if (event.type === "realtime-mode-updated") {
+      setRealtimeArmed(event.armed);
+      setRealtimeActive(event.active);
+      setRealtimeChanging(false);
+      if (!event.active) {
+        setPartialText("");
+      }
     } else if (event.type === "transcription-complete") {
       setState("idle");
       setPartialText("");
@@ -41,6 +52,12 @@ export function Overlay() {
       setTimeout(() => setState("idle"), 3000);
     }
   });
+
+  useEffect(() => {
+    void invoke<{ realtime_transcription: boolean }>("get_settings")
+      .then((settings) => setRealtimeArmed(settings.realtime_transcription))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (state === "recording") {
@@ -59,6 +76,21 @@ export function Overlay() {
 
   const formatTime = (s: number) =>
     `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+  const toggleRealtimeMode = async () => {
+    const nextMode = !realtimeArmed;
+    setRealtimeChanging(true);
+    setRealtimeArmed(nextMode);
+    try {
+      await invoke("set_realtime_transcription", { enabled: nextMode });
+    } catch (error) {
+      setRealtimeArmed(!nextMode);
+      setRealtimeChanging(false);
+      setErrorMsg(String(error));
+      setState("error");
+      setTimeout(() => setState("recording"), 3000);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -112,7 +144,24 @@ export function Overlay() {
               ))}
             </div>
             <span className="overlay-timer">{formatTime(elapsed)}</span>
-            {realtimeActive && <span className="overlay-live-badge">Realtime</span>}
+            <span
+              className={`overlay-mode-badge ${
+                realtimeActive ? "overlay-mode-badge-live" : "overlay-mode-badge-disabled"
+              }`}
+            >
+              {realtimeActive ? "Realtime" : realtimeArmed ? "Armed" : "Batch"}
+            </span>
+            <button
+              className="overlay-mode-toggle"
+              onClick={(event) => {
+                event.stopPropagation();
+                void toggleRealtimeMode();
+              }}
+              disabled={realtimeChanging}
+              title={realtimeArmed ? "Disable realtime transcription" : "Arm realtime transcription"}
+            >
+              {realtimeArmed ? "Disable" : "Arm"}
+            </button>
           </div>
           {realtimeActive && (
             <div className={`overlay-partial ${partialText ? "" : "overlay-partial-pending"}`}>

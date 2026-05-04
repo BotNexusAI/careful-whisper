@@ -441,10 +441,12 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             start_recording,
+            start_recording_from_settings,
             stop_recording,
             transcribe_audio_file,
             get_settings,
             update_settings,
+            set_realtime_transcription,
             list_models,
             download_model,
             delete_model,

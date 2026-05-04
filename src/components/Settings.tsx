@@ -37,6 +37,8 @@ export function Settings() {
   const [appVersion, setAppVersion] = useState("");
   const [selectedAudioPath, setSelectedAudioPath] = useState<string | null>(null);
   const [transcribingFile, setTranscribingFile] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [finalizingRecording, setFinalizingRecording] = useState(false);
 
   useEffect(() => {
     void getVersion().then(setAppVersion).catch(() => {});
@@ -52,9 +54,19 @@ export function Settings() {
     const unlistenTranscriptionError = listen<{ message: string }>("transcription-error", (e) => {
       setLastError(e.payload.message);
       setTranscribingFile(false);
+      setFinalizingRecording(false);
     });
     const unlistenComplete = listen<{ text: string }>("transcription-complete", () => {
       setTranscribingFile(false);
+      setFinalizingRecording(false);
+    });
+    const unlistenRecordingStarted = listen("recording-started", () => {
+      setRecording(true);
+      setFinalizingRecording(false);
+    });
+    const unlistenRecordingStopped = listen("recording-stopped", () => {
+      setRecording(false);
+      setFinalizingRecording(true);
     });
     const unlistenSettingsUpdated = listen("settings-updated", () => {
       void invoke<Settings>("get_settings").then(setSettings);
@@ -64,6 +76,8 @@ export function Settings() {
       void unlistenError.then((fn) => fn());
       void unlistenTranscriptionError.then((fn) => fn());
       void unlistenComplete.then((fn) => fn());
+      void unlistenRecordingStarted.then((fn) => fn());
+      void unlistenRecordingStopped.then((fn) => fn());
       void unlistenSettingsUpdated.then((fn) => fn());
     };
   }, []);
@@ -90,15 +104,33 @@ export function Settings() {
     return () => window.removeEventListener("focus", onFocus);
   }, []);
 
-  const save = async () => {
-    if (!settings) return;
+  const saveSettings = async (nextSettings: Settings) => {
     setSaving(true);
     try {
-      await invoke("update_settings", { settings });
+      await invoke("update_settings", { settings: nextSettings });
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2000);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const save = async () => {
+    if (!settings) return;
+    await saveSettings(settings);
+  };
+
+  const setRealtimeMode = async (enabled: boolean) => {
+    if (!settings) return;
+    const previousSettings = settings;
+    const nextSettings = { ...settings, realtime_transcription: enabled };
+    setSettings(nextSettings);
+    setLastError(null);
+    try {
+      await saveSettings(nextSettings);
+    } catch (error) {
+      setSettings(previousSettings);
+      setLastError(`Failed to update realtime mode: ${String(error)}`);
     }
   };
 
@@ -125,6 +157,21 @@ export function Settings() {
       await invoke("transcribe_audio_file", { path: selectedAudioPath });
     } catch (error) {
       setTranscribingFile(false);
+      setLastError(String(error));
+    }
+  };
+
+  const toggleRecording = async () => {
+    setLastError(null);
+    try {
+      if (recording) {
+        await invoke("stop_recording");
+      } else {
+        await invoke("start_recording_from_settings");
+      }
+    } catch (error) {
+      setRecording(false);
+      setFinalizingRecording(false);
       setLastError(String(error));
     }
   };
@@ -188,6 +235,34 @@ export function Settings() {
           </div>
         </div>
       )}
+
+      <div className="settings-section recording-control">
+        <div>
+          <label className="settings-label">Recording</label>
+          <div className="recording-mode-row">
+            <button
+              type="button"
+              className={`mode-pill ${
+                settings.realtime_transcription ? "mode-pill-armed" : "mode-pill-disabled"
+              }`}
+              onClick={() => void setRealtimeMode(!settings.realtime_transcription)}
+              disabled={saving}
+            >
+              {settings.realtime_transcription ? "Realtime armed" : "Realtime disabled"}
+            </button>
+            {settings.auto_paste && (
+              <span className="mode-pill mode-pill-armed">Auto-paste on</span>
+            )}
+          </div>
+        </div>
+        <button
+          className={recording ? "btn-danger" : "btn-primary"}
+          onClick={() => void toggleRecording()}
+          disabled={finalizingRecording}
+        >
+          {recording ? "Stop Recording" : finalizingRecording ? "Transcribing..." : "Start Recording"}
+        </button>
+      </div>
 
       <div className="settings-section">
         <label className="settings-label">Transcribe Audio File</label>
@@ -314,9 +389,7 @@ export function Settings() {
           <input
             type="checkbox"
             checked={settings.realtime_transcription}
-            onChange={(e) =>
-              setSettings({ ...settings, realtime_transcription: e.target.checked })
-            }
+            onChange={(e) => void setRealtimeMode(e.target.checked)}
           />
         </div>
         <div className="settings-toggle">

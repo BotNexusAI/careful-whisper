@@ -175,10 +175,22 @@ fn emit_transcription_error(app: &AppHandle, message: impl Into<String>) {
     );
 }
 
+fn emit_backend_error(app: &AppHandle, message: impl Into<String>) {
+    let message = message.into();
+    let _ = app.emit("backend-error", serde_json::json!({ "message": message }));
+}
+
 fn emit_realtime_transcription(app: &AppHandle, text: &str, full_text: &str) {
     let _ = app.emit(
         "realtime-transcription",
         serde_json::json!({ "text": text, "full_text": full_text }),
+    );
+}
+
+fn emit_realtime_mode_updated(app: &AppHandle, armed: bool, active: bool) {
+    let _ = app.emit(
+        "realtime-mode-updated",
+        serde_json::json!({ "armed": armed, "active": active }),
     );
 }
 
@@ -350,6 +362,7 @@ fn spawn_realtime_transcription_worker(
     channels: u16,
     settings: Settings,
     target_focus: Option<FocusTarget>,
+    start_sample_index: usize,
 ) {
     std::thread::spawn(move || {
         const CHUNK_SECONDS: f32 = 4.0;
@@ -359,7 +372,7 @@ fn spawn_realtime_transcription_worker(
         let channels_usize = channels as usize;
         let raw_chunk_len = (sample_rate as f32 * channels as f32 * CHUNK_SECONDS).round() as usize;
         let model_path = downloader::model_path(&settings.active_model);
-        let mut next_sample_index = 0usize;
+        let mut next_sample_index = start_sample_index;
         let mut full_text = String::new();
 
         log::info!(
@@ -399,7 +412,7 @@ fn spawn_realtime_transcription_worker(
                 Ok(samples) => samples,
                 Err(error) => {
                     log::warn!("[realtime] resample failed: {}", error);
-                    emit_transcription_error(&app, format!("Realtime resample error: {}", error));
+                    emit_backend_error(&app, format!("Realtime resample error: {}", error));
                     continue;
                 }
             };
@@ -434,12 +447,11 @@ fn spawn_realtime_transcription_worker(
                     if settings.auto_paste {
                         if let Some(target) = target_focus.clone() {
                             let committed_text = format!("{} ", text);
-                            if let Err(error) = crate::output::paste::type_text_into_target(
-                                target,
-                                &committed_text,
-                            ) {
+                            if let Err(error) =
+                                crate::output::paste::type_text_into_target(target, &committed_text)
+                            {
                                 log::warn!("[realtime] live typing failed: {}", error);
-                                emit_transcription_error(
+                                emit_backend_error(
                                     &app,
                                     format!("Realtime live typing error: {}", error),
                                 );
@@ -453,16 +465,95 @@ fn spawn_realtime_transcription_worker(
                         break;
                     }
                     log::warn!("[realtime] transcription failed: {}", error);
-                    emit_transcription_error(
-                        &app,
-                        format!("Realtime transcription error: {}", error),
-                    );
+                    emit_backend_error(&app, format!("Realtime transcription error: {}", error));
                 }
             }
         }
 
         log::info!("[realtime] worker stopped");
     });
+}
+
+fn stop_realtime_worker(state: &AppState) {
+    if let Some(active) = state.realtime_worker_active.lock().unwrap().take() {
+        active.store(false, Ordering::Relaxed);
+    }
+}
+
+fn start_realtime_worker_if_recording(
+    app: &AppHandle,
+    state: &AppState,
+    settings: Settings,
+    start_at_current_audio: bool,
+) -> bool {
+    let recording_context = {
+        let recording = state.recording.lock().unwrap();
+        recording.as_ref().map(|handle| {
+            let start_sample_index = if start_at_current_audio {
+                handle.samples.lock().unwrap().len()
+            } else {
+                0
+            };
+            (
+                handle.samples.clone(),
+                handle.sample_rate,
+                handle.channels,
+                start_sample_index,
+            )
+        })
+    };
+
+    let Some((samples, sample_rate, channels, start_sample_index)) = recording_context else {
+        stop_realtime_worker(state);
+        return false;
+    };
+
+    {
+        let active_slot = state.realtime_worker_active.lock().unwrap();
+        if active_slot
+            .as_ref()
+            .is_some_and(|active| active.load(Ordering::Relaxed))
+        {
+            return true;
+        }
+    }
+
+    let realtime_active = Arc::new(AtomicBool::new(true));
+    {
+        let mut active_slot = state.realtime_worker_active.lock().unwrap();
+        if let Some(previous) = active_slot.take() {
+            previous.store(false, Ordering::Relaxed);
+        }
+        *active_slot = Some(realtime_active.clone());
+    }
+
+    let target_focus = state.target_focus.lock().unwrap().clone();
+    spawn_realtime_transcription_worker(
+        app.clone(),
+        realtime_active,
+        samples,
+        sample_rate,
+        channels,
+        settings,
+        target_focus,
+        start_sample_index,
+    );
+    true
+}
+
+fn sync_realtime_worker(
+    app: &AppHandle,
+    state: &AppState,
+    enabled: bool,
+    settings: Settings,
+    start_at_current_audio: bool,
+) -> bool {
+    if enabled {
+        start_realtime_worker_if_recording(app, state, settings, start_at_current_audio)
+    } else {
+        stop_realtime_worker(state);
+        false
+    }
 }
 
 #[tauri::command]
@@ -530,6 +621,7 @@ pub async fn start_recording(app: AppHandle, state: State<'_, AppState>) -> Resu
             realtime_channels,
             settings.clone(),
             realtime_target_focus,
+            0,
         );
     }
 
@@ -577,6 +669,11 @@ pub async fn stop_recording(app: AppHandle, state: State<'_, AppState>) -> Resul
 
     app.emit("recording-stopped", ())
         .map_err(|e| e.to_string())?;
+    emit_realtime_mode_updated(
+        &app,
+        state.settings.lock().unwrap().realtime_transcription,
+        false,
+    );
 
     let samples_16k =
         crate::audio::resample::resample_to_16k(raw_samples, sample_rate, channels as usize)?;
@@ -645,15 +742,71 @@ pub async fn update_settings(
     settings: Settings,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let old_hotkey = state.settings.lock().unwrap().hotkey.clone();
+    let old_settings = state.settings.lock().unwrap().clone();
+    let old_hotkey = old_settings.hotkey.clone();
     let new_hotkey = settings.hotkey.clone();
 
     settings.save()?;
-    *state.settings.lock().unwrap() = settings;
+    *state.settings.lock().unwrap() = settings.clone();
 
     if old_hotkey != new_hotkey {
         crate::hotkey::manager::re_register_hotkey(&app, &old_hotkey, &new_hotkey)?;
     }
+
+    let mut realtime_active = state
+        .realtime_worker_active
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|active| active.load(Ordering::Relaxed));
+
+    if old_settings.realtime_transcription != settings.realtime_transcription {
+        realtime_active = sync_realtime_worker(
+            &app,
+            &state,
+            settings.realtime_transcription,
+            settings.clone(),
+            true,
+        );
+        emit_realtime_mode_updated(&app, settings.realtime_transcription, realtime_active);
+    }
+
+    let _ = app.emit(
+        "settings-updated",
+        serde_json::json!({ "settings": settings, "realtime_active": realtime_active }),
+    );
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_realtime_transcription(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> Result<(), String> {
+    let mut settings = state.settings.lock().unwrap().clone();
+    if settings.realtime_transcription == enabled {
+        let active = state
+            .realtime_worker_active
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|worker| worker.load(Ordering::Relaxed));
+        emit_realtime_mode_updated(&app, enabled, active);
+        return Ok(());
+    }
+
+    settings.realtime_transcription = enabled;
+    settings.save()?;
+    *state.settings.lock().unwrap() = settings.clone();
+
+    let realtime_active = sync_realtime_worker(&app, &state, enabled, settings.clone(), true);
+    emit_realtime_mode_updated(&app, enabled, realtime_active);
+    let _ = app.emit(
+        "settings-updated",
+        serde_json::json!({ "settings": settings, "realtime_active": realtime_active }),
+    );
 
     Ok(())
 }
