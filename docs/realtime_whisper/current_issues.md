@@ -5,6 +5,16 @@ effort. Keep it short and current.
 
 ## Open Issues
 
+### App Prototype Needs Live Validation
+
+The Rust/Tauri realtime prototype is wired in, but it has not yet been tested
+through the actual app UI with microphone permission, the overlay window, and
+the final paste path together.
+
+Next action: run the app, enable **Realtime transcription** in Settings, record
+the English control paragraph from `poc/test_samples.md`, and compare overlay
+partials with the final batch transcript.
+
 ### Continuous Runner Latency Is Still Noticeable
 
 With the correct microphone device (`:1`), continuous capture is good enough to
@@ -114,14 +124,15 @@ before assuming realtime latency numbers.
 
 Next action: compare `--gpu` vs default CPU on the same spoken phrase.
 
-### Fixed Chunks Are Not True Streaming
+### Sequential Chunked Capture Was Creating Gaps
 
-The POC currently records one complete chunk, transcribes it, prints text, then
-records the next chunk. That proves local chunked transcription, but it leaves
-gaps while Whisper is running.
+The first POC recorded one complete chunk, transcribed it, printed text, then
+recorded the next chunk. That proved local chunked transcription, but it left
+gaps while Whisper was running.
 
-Next action: after the first live test, decide whether to add concurrent
-recording/transcription in the POC or move that design directly into Rust.
+Resolution: `realtime_mic_poc.py` now defaults to continuous ffmpeg capture, and
+the Rust prototype reads from the active app capture buffer while recording. The
+remaining issue is latency, not dropped audio during transcription.
 
 ### Duplicate Text Handling Is Unimplemented
 
@@ -132,9 +143,9 @@ Next action: add overlap only after baseline chunk latency is measured.
 
 ### Partial Vs Committed Output Is Undesigned
 
-The app can paste final batch text today, but realtime dictation needs a rule
-for when text is stable enough to commit to another app. Replacing already
-pasted text is brittle across arbitrary desktop apps.
+The app now displays realtime partials in the overlay, but realtime dictation
+still needs a rule for when text is stable enough to commit to another app.
+Replacing already pasted text is brittle across arbitrary desktop apps.
 
 Next action: keep Phase 3 app integration limited to overlay/log partial text.
 
@@ -147,8 +158,9 @@ Next action: evaluate whether chunked output is usable enough before adding VAD.
 
 ### App Integration Must Preserve Batch Mode
 
-The current batch path is simple and reliable. Realtime work should land as a
-separate mode or pipeline, not a replacement for existing stop-then-transcribe
-behavior.
+The current batch path is simple and reliable. Realtime work landed as an
+opt-in settings flag and overlay-only partial text, not as a replacement for the
+existing stop-then-transcribe behavior.
 
-Next action: when Phase 3 begins, keep batch mode as the default fallback.
+Resolution: batch mode remains the default fallback, and auto-paste still uses
+the final transcript after stop.

@@ -9,10 +9,10 @@ POC entry point: `poc/realtime_mic_poc.py`
 | Phase | Status | Current State | Next Move |
 | --- | --- | --- | --- |
 | Phase 1 - Standalone POC | Complete enough | Mic capture works with `--device ':1'`; continuous capture produces usable English transcription; the runner prints timing/audio levels and a final transcript. | Keep using it as the baseline while testing latency improvements. |
-| Phase 2 - POC hardening | Started | Continuous capture fixed the capture-gap word-loss issue; remaining problems are latency and minor duplicate/substituted words. | Test a persistent-model path or tune chunk size/overlap before app integration. |
-| Phase 3 - App prototype | Not started | No Tauri/Rust integration for streaming partial text yet. | Start only after POC behavior is understood. |
+| Phase 2 - POC hardening | Started | Continuous capture fixed the capture-gap word-loss issue; remaining problems are latency and minor duplicate/substituted words. | Continue latency tuning in parallel with app validation. |
+| Phase 3 - App prototype | Implemented, needs live validation | The Tauri app has an opt-in realtime worker, partial transcript events, overlay display, and clean shutdown on stop. | Run the app, enable Realtime transcription, and compare overlay partials with the final batch transcript. |
 | Phase 4 - Stabilized output | Not started | Clipboard/paste remains batch-only. | Design commit semantics after partial text stabilizes. |
-| Phase 5 - Productization | Not started | No user-facing realtime mode. | Defer until prototype proves useful. |
+| Phase 5 - Productization | Started lightly | A user-facing settings checkbox exists, but defaults, tuning, and edge-case UX are not productized. | Defer deeper product work until the live prototype proves useful. |
 
 ## Completed Work
 
@@ -73,10 +73,36 @@ POC entry point: `poc/realtime_mic_poc.py`
   Remaining errors were minor duplicate/substituted words such as duplicated
   "I'm" and "testing" misheard as "just in". This proves the local capture plus
   Whisper path is viable for English, but it still feels slow.
+- Installed the Rust toolchain locally and verified the Tauri native build can
+  compile on this machine.
+- Added `realtime_transcription` to persisted settings with a default of
+  `false`, plus a Settings checkbox labeled "Realtime transcription".
+- Added an opt-in Rust realtime transcription worker that reads from the active
+  capture buffer while recording, transcribes 4-second chunks through the
+  existing local Whisper model, and emits `realtime-transcription` events.
+- Added a shared transcription lock so realtime chunks and the final batch
+  transcript do not use the same Whisper context concurrently.
+- Updated the overlay to show accumulated partial text while recording. Stopping
+  still runs the final batch transcription path, and auto-paste remains final
+  transcript only.
+- Increased the overlay window height to fit the partial text prototype.
+- Verified `cargo check --manifest-path src-tauri/Cargo.toml` passes after the
+  Rust integration.
 
 ## Next Test
 
 Run from normal Terminal/iTerm:
+
+```sh
+/usr/local/bin/corepack pnpm tauri dev
+```
+
+In the app Settings window, enable **Realtime transcription**, then record the
+English control paragraph from `poc/test_samples.md`. Watch whether partial text
+appears in the overlay while recording and whether the final transcript still
+pastes after stop.
+
+POC comparison commands:
 
 ```sh
 python3 poc/realtime_mic_poc.py --list-devices

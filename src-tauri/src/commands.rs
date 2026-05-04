@@ -403,6 +403,10 @@ fn spawn_realtime_transcription_worker(
                 }
             };
 
+            if !active.load(Ordering::Relaxed) {
+                break;
+            }
+
             let duration_secs = samples_16k.len() as f32 / 16_000.0;
             log::info!("[realtime] transcribing {:.1}s chunk", duration_secs);
 
@@ -415,6 +419,9 @@ fn spawn_realtime_transcription_worker(
                 &model_path,
             ) {
                 Ok(text) if !text.trim().is_empty() => {
+                    if !active.load(Ordering::Relaxed) {
+                        break;
+                    }
                     let text = text.trim().to_string();
                     if !full_text.is_empty() {
                         full_text.push(' ');
@@ -425,6 +432,9 @@ fn spawn_realtime_transcription_worker(
                 }
                 Ok(_) => {}
                 Err(error) => {
+                    if !active.load(Ordering::Relaxed) {
+                        break;
+                    }
                     log::warn!("[realtime] transcription failed: {}", error);
                     emit_transcription_error(
                         &app,
