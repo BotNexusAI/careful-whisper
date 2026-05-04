@@ -105,6 +105,27 @@ On first launch the app will prompt you to download a model. Models are stored l
 
 ---
 
+## Development Docs
+
+The realtime dictation work is tracked separately from the current batch
+transcription app so the POC, plan, and open questions stay discoverable.
+
+| Path | Purpose |
+|---|---|
+| `docs/realtime_whisper_discussion.md` | Original realtime dictation architecture discussion and feasibility notes. |
+| `docs/realtime_whisper/plan.md` | Phase plan for realtime dictation, starting with the standalone POC. |
+| `docs/realtime_whisper/implementation_tracker.md` | Current status, completed POC work, and next test commands. |
+| `docs/realtime_whisper/current_issues.md` | Active risks, resolved findings, and tuning questions. |
+| `poc/README.md` | POC runbook and file map. Start here for local realtime experiments. |
+| `poc/realtime_mic_poc.py` | Continuous/chunked ffmpeg capture runner that invokes local `whisper.cpp`. |
+| `poc/run_whisper_stream.sh` | Wrapper for the `whisper-stream` comparison path. |
+| `poc/test_samples.md` | Fixed English and Hebrew read-aloud samples for repeatable comparisons. |
+| `docs/security/audit-2026-03-22.md` | Security audit notes. |
+| `docs/index.html` and `docs/assets/` | Static project website assets. |
+
+Generated POC artifacts live under `poc/audio/`, `poc/models/`, and
+`poc/vendor/`; they are documented in `poc/README.md` and ignored by git.
+
 ## Building from Source
 
 <details>
