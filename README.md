@@ -147,6 +147,7 @@ questions stay discoverable.
 
 | Path | Purpose |
 |---|---|
+| `CHANGELOG.md` | v1.0.0 release notes for the realtime dictation branch. |
 | `docs/realtime_whisper_discussion.md` | Original realtime dictation architecture discussion and feasibility notes. |
 | `docs/realtime_whisper/plan.md` | Phase plan for realtime dictation, from standalone POC through app integration. |
 | `docs/realtime_whisper/implementation_tracker.md` | POC status, completed realtime experiments, and next test commands. |
