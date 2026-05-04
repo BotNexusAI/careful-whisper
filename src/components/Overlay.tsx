@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type PointerEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { LogicalSize, getCurrentWindow } from "@tauri-apps/api/window";
 import { useTauriEvents } from "../hooks/useTauriEvents";
 
 type OverlayState = "idle" | "recording" | "transcribing" | "error";
@@ -9,6 +10,9 @@ type OverlayState = "idle" | "recording" | "transcribing" | "error";
 const BAR_WEIGHTS = [0.35, 0.65, 1.0, 0.65, 0.35];
 const MIN_HEIGHT = 3;
 const MAX_HEIGHT = 16;
+const OVERLAY_WIDTH = 360;
+const OVERLAY_BASE_HEIGHT = 120;
+const OVERLAY_MAX_HEIGHT = 280;
 
 export function Overlay() {
   const [state, setState] = useState<OverlayState>("idle");
@@ -21,6 +25,9 @@ export function Overlay() {
   const [realtimeChanging, setRealtimeChanging] = useState(false);
   const [barHeights, setBarHeights] = useState<number[] | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const partialRef = useRef<HTMLDivElement | null>(null);
+  const lastWindowHeight = useRef(OVERLAY_BASE_HEIGHT);
   const smoothedLevel = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -85,6 +92,14 @@ export function Overlay() {
   const formatTime = (s: number) =>
     `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
+  const startOverlayDrag = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("button")) return;
+    if (!target?.closest(".overlay-pill")) return;
+    void getCurrentWindow().startDragging().catch(() => {});
+  };
+
   const toggleRealtimeMode = async () => {
     const nextMode = !realtimeArmed;
     setRealtimeChanging(true);
@@ -130,10 +145,52 @@ export function Overlay() {
     };
   }, []);
 
+  useEffect(() => {
+    const partial = partialRef.current;
+    if (partial) {
+      partial.scrollTop = partial.scrollHeight;
+    }
+  }, [partialText]);
+
+  useEffect(() => {
+    if (state === "idle") {
+      if (lastWindowHeight.current !== OVERLAY_BASE_HEIGHT) {
+        lastWindowHeight.current = OVERLAY_BASE_HEIGHT;
+        void getCurrentWindow()
+          .setSize(new LogicalSize(OVERLAY_WIDTH, OVERLAY_BASE_HEIGHT))
+          .catch(() => {});
+      }
+      return;
+    }
+
+    const root = rootRef.current;
+    const pill = root?.querySelector<HTMLElement>(".overlay-pill");
+    if (!pill) return;
+
+    const resizeWindow = () => {
+      const nextHeight = Math.min(
+        OVERLAY_MAX_HEIGHT,
+        Math.max(OVERLAY_BASE_HEIGHT, Math.ceil(pill.scrollHeight) + 16)
+      );
+      if (Math.abs(nextHeight - lastWindowHeight.current) < 2) {
+        return;
+      }
+      lastWindowHeight.current = nextHeight;
+      void getCurrentWindow()
+        .setSize(new LogicalSize(OVERLAY_WIDTH, nextHeight))
+        .catch(() => {});
+    };
+
+    resizeWindow();
+    const observer = new ResizeObserver(resizeWindow);
+    observer.observe(pill);
+    return () => observer.disconnect();
+  }, [state, realtimeActive, partialText]);
+
   if (state === "idle") return null;
 
   return (
-    <div className="overlay-root">
+    <div className="overlay-root" ref={rootRef} onPointerDown={startOverlayDrag}>
       {state === "recording" && (
         <div
           className={`overlay-pill overlay-recording ${
@@ -181,7 +238,10 @@ export function Overlay() {
             </button>
           </div>
           {realtimeActive && (
-            <div className={`overlay-partial ${partialText ? "" : "overlay-partial-pending"}`}>
+            <div
+              ref={partialRef}
+              className={`overlay-partial ${partialText ? "" : "overlay-partial-pending"}`}
+            >
               {partialText || "Listening for live transcription..."}
             </div>
           )}

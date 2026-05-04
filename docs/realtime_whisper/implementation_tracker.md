@@ -116,6 +116,14 @@ POC entry point: `poc/realtime_mic_poc.py`
 - Changed the Settings Start button to hide Settings, wait briefly, capture the
   newly focused target, and then start recording. This gives the mouse path a
   real way to type into another app.
+- Removed the Settings save button. Settings now autosave optimistically as each
+  control changes, with debouncing for typed fields like the hotkey and max
+  recording duration.
+- Made the recording bubble draggable, visible on all workspaces, and more
+  assertive on macOS fullscreen Spaces through native window collection behavior.
+- Changed the live transcript area from a single-line ellipsis to wrapped text
+  that grows the overlay window downward until a capped height, then keeps the
+  newest text visible.
 - Fixed overlay positioning on external monitors by positioning in physical
   monitor coordinates with the target monitor's scale factor instead of doubling
   external-monitor origins by the primary display scale.

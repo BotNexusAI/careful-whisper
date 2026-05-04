@@ -90,7 +90,8 @@ The Settings window will open automatically because no model is downloaded yet.
 4. Press the hotkey again to stop — the transcribed text is pasted directly where your cursor was.
 
 Click the menu-bar icon to open **Settings**. Secondary-click the icon to open
-the app menu with language and quit actions.
+the app menu with language and quit actions. Settings save automatically as you
+change them.
 
 The Settings **Start Recording** button hides Settings briefly before recording
 starts. Focus the destination text field when Settings closes so the app can
@@ -101,7 +102,8 @@ reliable way to start from an already-focused text field.
 
 Enable **Realtime transcription** in Settings to show partial transcript text in
 the overlay while recording. The recording bubble also shows the current mode
-and lets you arm or disable realtime mode while a recording is active.
+and lets you arm or disable realtime mode while a recording is active. The
+bubble can be dragged if it appears in an awkward spot.
 
 When **Auto-paste after transcription** is also enabled, realtime chunks are
 typed into the focused app during recording through the captured hotkey target.

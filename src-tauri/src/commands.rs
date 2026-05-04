@@ -11,6 +11,9 @@ use crate::models::downloader::{self, ModelInfo};
 use crate::output::paste::FocusTarget;
 use crate::AppState;
 
+const OVERLAY_WIDTH: f64 = 360.0;
+const OVERLAY_BASE_HEIGHT: f64 = 120.0;
+
 fn preview_text(text: &str, max_chars: usize) -> String {
     let mut chars = text.chars();
     let mut preview = String::new();
@@ -98,8 +101,8 @@ fn position_overlay(app: &AppHandle, win: &tauri::WebviewWindow, position: &Over
     let screen_w = monitor.size().width as f64;
     let screen_h = monitor.size().height as f64;
 
-    let overlay_w = 320.0 * target_scale;
-    let overlay_h = 120.0 * target_scale;
+    let overlay_w = OVERLAY_WIDTH * target_scale;
+    let overlay_h = OVERLAY_BASE_HEIGHT * target_scale;
     let margin = 16.0 * target_scale;
     let top_offset = 40.0 * target_scale;
 
@@ -138,8 +141,14 @@ fn set_overlay_above_dock(win: &tauri::WebviewWindow) {
     unsafe {
         if let Ok(ns_win) = win.ns_window() {
             let ns_win = ns_win as *mut objc2::runtime::AnyObject;
-            // kCGStatusWindowLevel = 25, above kCGDockWindowLevel (20)
+            // kCGStatusWindowLevel = 25, above kCGDockWindowLevel (20).
             let _: () = msg_send![ns_win, setLevel: 25_i64];
+            // Join all Spaces and appear as a fullscreen auxiliary window so
+            // the overlay can stay visible when the target app is fullscreen.
+            let collection_behavior: u64 = (1 << 0) | (1 << 4) | (1 << 8);
+            let _: () = msg_send![ns_win, setCollectionBehavior: collection_behavior];
+            let _: () = msg_send![ns_win, setCanHide: false];
+            let _: () = msg_send![ns_win, orderFrontRegardless];
         }
     }
 }
@@ -807,12 +816,18 @@ pub async fn update_settings(
     let old_hotkey = old_settings.hotkey.clone();
     let new_hotkey = settings.hotkey.clone();
 
-    settings.save()?;
-    *state.settings.lock().unwrap() = settings.clone();
-
-    if old_hotkey != new_hotkey {
+    let hotkey_changed = old_hotkey != new_hotkey;
+    if hotkey_changed {
         crate::hotkey::manager::re_register_hotkey(&app, &old_hotkey, &new_hotkey)?;
     }
+
+    if let Err(error) = settings.save() {
+        if hotkey_changed {
+            let _ = crate::hotkey::manager::re_register_hotkey(&app, &new_hotkey, &old_hotkey);
+        }
+        return Err(error);
+    }
+    *state.settings.lock().unwrap() = settings.clone();
 
     let mut realtime_active = state
         .realtime_worker_active
