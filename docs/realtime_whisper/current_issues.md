@@ -159,13 +159,23 @@ Next action: add overlap only after baseline chunk latency is measured.
 ### Realtime Commit Semantics Are Still Naive
 
 The app now pastes realtime chunks into the captured hotkey target when
-**Auto-paste after transcription** is enabled. This validates the product path,
-but it commits whole chunk output directly. There is no overlap,
+**Auto-paste after transcription** is enabled. On macOS this now uses Unicode
+keyboard events instead of clipboard-plus-Cmd+V when a target was captured. This
+validates the product path, but it commits whole chunk output directly. There is no overlap,
 duplicate-suffix handling, stable-prefix logic, or edit/replace strategy yet.
 
 Next action: test naive chunk commits first. If words repeat or chunk boundaries
 feel rough, add overlap plus deduplication before trying any arbitrary-app
 replace behavior.
+
+### Settings Start Has No External Text Target
+
+The Settings **Start Recording** button clears `target_focus`, so it cannot type
+into the app where the user previously had a cursor. This is intentional because
+clicking Settings changes the focused app to Settings itself.
+
+Next action: use the global hotkey for real insertion tests. If product UX needs
+a mouse-only start path later, it needs an explicit target-selection design.
 
 ### VAD Is Deferred
 

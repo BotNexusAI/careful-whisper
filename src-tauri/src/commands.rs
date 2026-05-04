@@ -277,18 +277,6 @@ fn spawn_transcription(
                     &text[..text.len().min(100)]
                 );
 
-                // Save the user's clipboard before overwriting it
-                let previous_clipboard = crate::output::clipboard::read_clipboard();
-
-                let clipboard_ok = match crate::output::clipboard::copy_to_clipboard(text) {
-                    Ok(()) => true,
-                    Err(e) => {
-                        log::error!("[clipboard] failed: {}", e);
-                        emit_transcription_error(&app, format!("Clipboard error: {}", e));
-                        false
-                    }
-                };
-
                 if hide_overlay_on_finish {
                     hide_overlay(&app);
                 }
@@ -298,24 +286,38 @@ fn spawn_transcription(
                     serde_json::json!({ "text": text }),
                 );
 
-                if clipboard_ok && auto_paste {
-                    if let Some(target) = target_focus {
-                        match crate::output::paste::paste_into_target(target) {
-                            Ok(()) => {
-                                // Paste succeeded — restore the user's original clipboard
-                                if let Some(prev) = previous_clipboard {
-                                    std::thread::sleep(std::time::Duration::from_millis(200));
-                                    let _ = crate::output::clipboard::copy_to_clipboard(&prev);
+                if auto_paste {
+                    match target_focus {
+                        Some(target) => {
+                            if let Err(error) =
+                                crate::output::paste::type_text_into_target(target, text)
+                            {
+                                log::error!("[type] failed: {}", error);
+                                if let Err(clipboard_error) =
+                                    crate::output::clipboard::copy_to_clipboard(text)
+                                {
+                                    log::error!("[clipboard] failed: {}", clipboard_error);
+                                    emit_transcription_error(
+                                        &app,
+                                        format!("Clipboard error: {}", clipboard_error),
+                                    );
                                 }
                             }
-                            Err(error) => {
-                                // Paste failed — keep transcription on clipboard so user can Cmd+V manually
-                                log::error!("[paste] failed: {}", error);
+                        }
+                        None => {
+                            log::warn!("[type] no target window captured — copying transcript");
+                            if let Err(error) = crate::output::clipboard::copy_to_clipboard(text) {
+                                log::error!("[clipboard] failed: {}", error);
+                                emit_transcription_error(
+                                    &app,
+                                    format!("Clipboard error: {}", error),
+                                );
                             }
                         }
-                    } else {
-                        log::warn!("[paste] no target window captured — skipping paste");
                     }
+                } else if let Err(error) = crate::output::clipboard::copy_to_clipboard(text) {
+                    log::error!("[clipboard] failed: {}", error);
+                    emit_transcription_error(&app, format!("Clipboard error: {}", error));
                 }
             }
             Err(ref error) => {

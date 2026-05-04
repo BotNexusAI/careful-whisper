@@ -32,11 +32,27 @@ pub fn get_frontmost_target() -> Option<FocusTarget> {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn activate_target_app(target: FocusTarget) {
+    use objc2::msg_send;
+    use objc2::runtime::AnyClass;
+
+    unsafe {
+        if let Some(cls) = AnyClass::get(c"NSRunningApplication") {
+            let app: *mut objc2::runtime::AnyObject =
+                msg_send![cls, runningApplicationWithProcessIdentifier: target];
+            if !app.is_null() {
+                let _: bool = msg_send![app, activateWithOptions: 2u64];
+            }
+        }
+    }
+
+    std::thread::sleep(std::time::Duration::from_millis(100));
+}
+
 /// Activates the target app and simulates Cmd+V via CoreGraphics CGEventPostToPid.
 #[cfg(target_os = "macos")]
 pub fn paste_into_target(target: FocusTarget) -> Result<(), String> {
-    use objc2::msg_send;
-    use objc2::runtime::AnyClass;
     use std::os::raw::c_void;
 
     #[link(name = "CoreGraphics", kind = "framework")]
@@ -58,18 +74,7 @@ pub fn paste_into_target(target: FocusTarget) -> Result<(), String> {
     const KCG_EVENT_FLAG_MASK_COMMAND: u64 = 1 << 20;
     const KVK_ANSI_V: u16 = 9;
 
-    // Re-activate the target app so it's frontmost and ready to receive input.
-    unsafe {
-        if let Some(cls) = AnyClass::get(c"NSRunningApplication") {
-            let app: *mut objc2::runtime::AnyObject =
-                msg_send![cls, runningApplicationWithProcessIdentifier: target];
-            if !app.is_null() {
-                let _: bool = msg_send![app, activateWithOptions: 2u64];
-            }
-        }
-    }
-
-    std::thread::sleep(std::time::Duration::from_millis(100));
+    activate_target_app(target);
 
     // Send Cmd+V directly to the target PID
     unsafe {
@@ -98,8 +103,56 @@ pub fn paste_into_target(target: FocusTarget) -> Result<(), String> {
 
 #[cfg(target_os = "macos")]
 pub fn type_text_into_target(target: FocusTarget, text: &str) -> Result<(), String> {
-    crate::output::clipboard::copy_to_clipboard(text)?;
-    paste_into_target(target)
+    use std::os::raw::c_void;
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGEventCreateKeyboardEvent(
+            source: *const c_void,
+            virtual_key: u16,
+            key_down: bool,
+        ) -> *mut c_void;
+        fn CGEventKeyboardSetUnicodeString(
+            event: *mut c_void,
+            string_length: usize,
+            unicode_string: *const u16,
+        );
+        fn CGEventPostToPid(pid: i32, event: *mut c_void);
+    }
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFRelease(cf: *mut c_void);
+    }
+
+    if text.is_empty() {
+        return Ok(());
+    }
+
+    activate_target_app(target);
+
+    let utf16: Vec<u16> = text.encode_utf16().collect();
+    for chunk in utf16.chunks(32) {
+        unsafe {
+            let key_down = CGEventCreateKeyboardEvent(std::ptr::null(), 0, true);
+            if key_down.is_null() {
+                return Err("Failed to create Unicode key-down event".into());
+            }
+            CGEventKeyboardSetUnicodeString(key_down, chunk.len(), chunk.as_ptr());
+            CGEventPostToPid(target, key_down);
+            CFRelease(key_down);
+
+            let key_up = CGEventCreateKeyboardEvent(std::ptr::null(), 0, false);
+            if key_up.is_null() {
+                return Err("Failed to create Unicode key-up event".into());
+            }
+            CGEventPostToPid(target, key_up);
+            CFRelease(key_up);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(3));
+    }
+
+    Ok(())
 }
 
 // ── Windows implementation ───────────────────────────────────────────────────

@@ -105,6 +105,9 @@ POC entry point: `poc/realtime_mic_poc.py`
   transcription** and uses the captured hotkey target; realtime finalization
   still copies the full final transcript to the clipboard but skips the old
   final paste to avoid duplicate insertion.
+- Switched macOS target output from clipboard-plus-Cmd+V to Unicode keyboard
+  events for the captured target PID. Clipboard is now a fallback when no target
+  was captured or typing fails.
 - Added realtime arm/disable controls in the Settings recording section and in
   the recording bubble. Toggling realtime while recording starts or stops the
   realtime worker for the active session.
@@ -126,9 +129,10 @@ In the app Settings window, set Language to English or Auto, enable
 into a text field and start recording with the global hotkey. Read the English
 control paragraph from `poc/test_samples.md`. Watch whether partial text appears
 in the overlay, whether chunks are inserted into the target app during
-recording, and whether stopping avoids a duplicate final paste. The current
-local config was last observed as `language='he'`, so do not skip the language
-setting when testing English.
+recording, and whether stopping avoids a duplicate final paste. If recording is
+started from the Settings button, the target is intentionally `None`, so the app
+will not type into another app. The current local config was last observed as
+`language='he'`, so do not skip the language setting when testing English.
 
 POC comparison commands:
 

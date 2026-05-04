@@ -92,6 +92,10 @@ The Settings window will open automatically because no model is downloaded yet.
 Click the menu-bar icon to open **Settings**. Secondary-click the icon to open
 the app menu with language and quit actions.
 
+The Settings **Start Recording** button is meant for safe recording and overlay
+tests. To insert text into another app at the cursor, start recording with the
+global hotkey after focusing that app's text field.
+
 ### Realtime transcription
 
 Enable **Realtime transcription** in Settings to show partial transcript text in
@@ -99,10 +103,9 @@ the overlay while recording. The recording bubble also shows the current mode
 and lets you arm or disable realtime mode while a recording is active.
 
 When **Auto-paste after transcription** is also enabled, realtime chunks are
-pasted into the focused app during recording. When you stop, the app still runs
-the full final transcription path and copies the completed result to the
-clipboard, but it does not paste the final transcript a second time in realtime
-mode.
+typed into the focused app during recording through the captured hotkey target.
+When you stop, the app still runs the full final transcription path. In realtime
+mode it does not paste the final transcript a second time.
 
 ## Default Hotkey
 
