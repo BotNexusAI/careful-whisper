@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export type AppEvent =
-  | { type: "recording-started" }
+  | { type: "recording-started"; realtime: boolean }
   | { type: "recording-stopped" }
   | { type: "transcription-complete"; text: string }
   | { type: "realtime-transcription"; text: string; fullText: string }
@@ -23,7 +23,9 @@ export function useTauriEvents(handler: Handler) {
 
     const setup = async () => {
       const subscriptions = await Promise.all([
-        listen("recording-started", () => onEvent({ type: "recording-started" })),
+        listen<{ realtime?: boolean }>("recording-started", (e) =>
+          onEvent({ type: "recording-started", realtime: Boolean(e.payload?.realtime) })
+        ),
         listen("recording-stopped", () => onEvent({ type: "recording-stopped" })),
         listen<{ text: string }>("transcription-complete", (e) =>
           onEvent({ type: "transcription-complete", text: e.payload.text })

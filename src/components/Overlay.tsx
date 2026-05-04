@@ -13,6 +13,7 @@ export function Overlay() {
   const [state, setState] = useState<OverlayState>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [partialText, setPartialText] = useState("");
+  const [realtimeActive, setRealtimeActive] = useState(false);
   const [barHeights, setBarHeights] = useState<number[] | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const smoothedLevel = useRef(0);
@@ -23,6 +24,7 @@ export function Overlay() {
       setState("recording");
       setElapsed(0);
       setPartialText("");
+      setRealtimeActive(event.realtime);
     } else if (event.type === "recording-stopped") {
       setState("transcribing");
       setBarHeights(null);
@@ -31,8 +33,10 @@ export function Overlay() {
     } else if (event.type === "transcription-complete") {
       setState("idle");
       setPartialText("");
+      setRealtimeActive(false);
     } else if (event.type === "transcription-error") {
       setErrorMsg(event.message);
+      setRealtimeActive(false);
       setState("error");
       setTimeout(() => setState("idle"), 3000);
     }
@@ -91,7 +95,11 @@ export function Overlay() {
   return (
     <div className="overlay-root">
       {state === "recording" && (
-        <div className={`overlay-pill overlay-recording ${partialText ? "overlay-recording-live" : ""}`}>
+        <div
+          className={`overlay-pill overlay-recording ${
+            realtimeActive ? "overlay-recording-live" : ""
+          }`}
+        >
           <div className="overlay-row">
             <span className="recording-dot" />
             <div className="waveform">
@@ -104,8 +112,13 @@ export function Overlay() {
               ))}
             </div>
             <span className="overlay-timer">{formatTime(elapsed)}</span>
+            {realtimeActive && <span className="overlay-live-badge">Realtime</span>}
           </div>
-          {partialText && <div className="overlay-partial">{partialText}</div>}
+          {realtimeActive && (
+            <div className={`overlay-partial ${partialText ? "" : "overlay-partial-pending"}`}>
+              {partialText || "Listening for live transcription..."}
+            </div>
+          )}
         </div>
       )}
       {state === "transcribing" && (

@@ -96,6 +96,72 @@ pub fn paste_into_target(target: FocusTarget) -> Result<(), String> {
     Ok(())
 }
 
+/// Activates the target app and types text through CoreGraphics Unicode
+/// keyboard events. This avoids overwriting the clipboard for realtime chunks.
+#[cfg(target_os = "macos")]
+pub fn type_text_into_target(target: FocusTarget, text: &str) -> Result<(), String> {
+    use objc2::msg_send;
+    use objc2::runtime::AnyClass;
+    use std::os::raw::c_void;
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGEventCreateKeyboardEvent(
+            source: *const c_void,
+            virtual_key: u16,
+            key_down: bool,
+        ) -> *mut c_void;
+        fn CGEventKeyboardSetUnicodeString(
+            event: *mut c_void,
+            string_length: usize,
+            unicode_string: *const u16,
+        );
+        fn CGEventPostToPid(pid: i32, event: *mut c_void);
+    }
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFRelease(cf: *mut c_void);
+    }
+
+    if text.is_empty() {
+        return Ok(());
+    }
+
+    unsafe {
+        if let Some(cls) = AnyClass::get(c"NSRunningApplication") {
+            let app: *mut objc2::runtime::AnyObject =
+                msg_send![cls, runningApplicationWithProcessIdentifier: target];
+            if !app.is_null() {
+                let _: bool = msg_send![app, activateWithOptions: 2u64];
+            }
+        }
+    }
+
+    std::thread::sleep(std::time::Duration::from_millis(60));
+
+    for chunk in text
+        .chars()
+        .collect::<Vec<_>>()
+        .chunks(32)
+        .map(|chars| chars.iter().collect::<String>())
+    {
+        let utf16: Vec<u16> = chunk.encode_utf16().collect();
+        unsafe {
+            let key_down = CGEventCreateKeyboardEvent(std::ptr::null(), 0, true);
+            if key_down.is_null() {
+                return Err("Failed to create CGEvent text key-down".into());
+            }
+            CGEventKeyboardSetUnicodeString(key_down, utf16.len(), utf16.as_ptr());
+            CGEventPostToPid(target, key_down);
+            CFRelease(key_down);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+
+    Ok(())
+}
+
 // ── Windows implementation ───────────────────────────────────────────────────
 
 #[cfg(target_os = "windows")]
@@ -221,6 +287,12 @@ pub fn paste_into_target(target: FocusTarget) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
+pub fn type_text_into_target(target: FocusTarget, text: &str) -> Result<(), String> {
+    crate::output::clipboard::copy_to_clipboard(text)?;
+    paste_into_target(target)
+}
+
 // ── Linux implementation ────────────────────────────────────────────────────
 
 #[cfg(target_os = "linux")]
@@ -306,6 +378,12 @@ fn paste_x11(window_id: &str) -> Result<(), String> {
 
     std::thread::sleep(std::time::Duration::from_millis(50));
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+pub fn type_text_into_target(target: FocusTarget, text: &str) -> Result<(), String> {
+    crate::output::clipboard::copy_to_clipboard(text)?;
+    paste_into_target(target)
 }
 
 #[cfg(target_os = "linux")]

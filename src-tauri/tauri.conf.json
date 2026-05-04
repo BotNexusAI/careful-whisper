@@ -4,9 +4,9 @@
   "version": "0.5.6",
   "identifier": "com.whispertap.careless-whisper",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "corepack pnpm dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "corepack pnpm build",
     "frontendDist": "../dist"
   },
   "app": {

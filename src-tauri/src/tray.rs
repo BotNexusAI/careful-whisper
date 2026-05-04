@@ -3,7 +3,7 @@
 
 use tauri::{
     menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
-    tray::TrayIconBuilder,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, Runtime, WindowEvent,
 };
 
@@ -88,6 +88,13 @@ fn change_language<R: Runtime>(app: &AppHandle<R>, code: &str) {
     let _ = app.emit("settings-updated", serde_json::json!({ "language": code }));
 }
 
+fn show_settings_window<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(window) = app.get_webview_window("settings") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let current_lang = {
         let state = app.state::<crate::AppState>();
@@ -121,6 +128,17 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .icon(tray_icon)
         .icon_as_template(true)
         .menu(&menu)
+        .menu_on_left_click(false)
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Down,
+                ..
+            } = event
+            {
+                show_settings_window(tray.app_handle());
+            }
+        })
         .on_menu_event(|app, event| {
             let id = event.id.as_ref();
             if let Some(code) = id.strip_prefix("lang_") {
@@ -129,10 +147,7 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             }
             match id {
                 "settings" => {
-                    if let Some(window) = app.get_webview_window("settings") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    }
+                    show_settings_window(app);
                 }
                 "quit" => {
                     app.exit(0);

@@ -89,7 +89,8 @@ The Settings window will open automatically because no model is downloaded yet.
 3. Speak.
 4. Press the hotkey again to stop — the transcribed text is pasted directly where your cursor was.
 
-The hotkey, language, and other options can be changed from **Settings** in the tray menu.
+Click the menu-bar icon to open **Settings**. Secondary-click the icon to open
+the app menu with language and quit actions.
 
 ### Realtime transcription
 

@@ -349,6 +349,7 @@ fn spawn_realtime_transcription_worker(
     sample_rate: u32,
     channels: u16,
     settings: Settings,
+    target_focus: Option<FocusTarget>,
 ) {
     std::thread::spawn(move || {
         const CHUNK_SECONDS: f32 = 4.0;
@@ -429,6 +430,22 @@ fn spawn_realtime_transcription_worker(
                     full_text.push_str(&text);
                     log::info!("[realtime] partial: {:?}", text);
                     emit_realtime_transcription(&app, &text, &full_text);
+
+                    if settings.auto_paste {
+                        if let Some(target) = target_focus.clone() {
+                            let committed_text = format!("{} ", text);
+                            if let Err(error) = crate::output::paste::type_text_into_target(
+                                target,
+                                &committed_text,
+                            ) {
+                                log::warn!("[realtime] live typing failed: {}", error);
+                                emit_transcription_error(
+                                    &app,
+                                    format!("Realtime live typing error: {}", error),
+                                );
+                            }
+                        }
+                    }
                 }
                 Ok(_) => {}
                 Err(error) => {
@@ -469,6 +486,7 @@ pub async fn start_recording(app: AppHandle, state: State<'_, AppState>) -> Resu
     let realtime_samples = handle.samples.clone();
     let realtime_sample_rate = handle.sample_rate;
     let realtime_channels = handle.channels;
+    let realtime_target_focus = state.target_focus.lock().unwrap().clone();
     *state.recording.lock().unwrap() = Some(handle);
 
     if let Some(win) = app.get_webview_window("overlay") {
@@ -511,12 +529,25 @@ pub async fn start_recording(app: AppHandle, state: State<'_, AppState>) -> Resu
             realtime_sample_rate,
             realtime_channels,
             settings.clone(),
+            realtime_target_focus,
         );
     }
 
-    app.emit("recording-started", ())
-        .map_err(|e| e.to_string())?;
+    app.emit(
+        "recording-started",
+        serde_json::json!({ "realtime": settings.realtime_transcription }),
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn start_recording_from_settings(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    *state.target_focus.lock().unwrap() = None;
+    start_recording(app, state).await
 }
 
 #[tauri::command]
@@ -551,12 +582,13 @@ pub async fn stop_recording(app: AppHandle, state: State<'_, AppState>) -> Resul
         crate::audio::resample::resample_to_16k(raw_samples, sample_rate, channels as usize)?;
     let (language, auto_paste, translate_to_english, target_focus, active_model, model_path) =
         transcription_inputs(&state);
+    let final_auto_paste = auto_paste && !state.settings.lock().unwrap().realtime_transcription;
 
     spawn_transcription(
         app,
         samples_16k,
         language,
-        auto_paste,
+        final_auto_paste,
         translate_to_english,
         target_focus,
         active_model,

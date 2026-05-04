@@ -88,6 +88,16 @@ POC entry point: `poc/realtime_mic_poc.py`
 - Increased the overlay window height to fit the partial text prototype.
 - Verified `cargo check --manifest-path src-tauri/Cargo.toml` passes after the
   Rust integration.
+- Verified `/usr/local/bin/corepack pnpm build` passes.
+- Verified `/opt/homebrew/bin/cargo test --manifest-path src-tauri/Cargo.toml`
+  passes with 35 Rust unit tests.
+- Pinned `packageManager` and changed Tauri dev/build hooks to `corepack pnpm`
+  so this repo does not require a separate global `pnpm` shim.
+- Added a menu-bar icon left-click handler that opens Settings. Secondary-click
+  still exposes the tray menu.
+- Updated the recording overlay so realtime mode is visible immediately: it now
+  shows a `Realtime` badge and a pending live-transcription line before the
+  first partial chunk returns.
 
 ## Next Test
 
@@ -97,10 +107,12 @@ Run from normal Terminal/iTerm:
 /usr/local/bin/corepack pnpm tauri dev
 ```
 
-In the app Settings window, enable **Realtime transcription**, then record the
-English control paragraph from `poc/test_samples.md`. Watch whether partial text
-appears in the overlay while recording and whether the final transcript still
-pastes after stop.
+In the app Settings window, set Language to English or Auto, enable
+**Realtime transcription**, then record the English control paragraph from
+`poc/test_samples.md`. Watch whether partial text appears in the overlay while
+recording and whether the final transcript still pastes after stop. The current
+local config was last observed as `language='he'`, so do not skip the language
+setting when testing English.
 
 POC comparison commands:
 
