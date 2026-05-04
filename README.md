@@ -1,19 +1,34 @@
 <p align="center">
-  <img width="512" height="512" alt="careless-whisper" src="https://github.com/user-attachments/assets/bde6e505-9564-4267-ae16-1880e9ca269f" />
+  <img width="512" height="512" alt="careful-whisper" src="https://github.com/user-attachments/assets/bde6e505-9564-4267-ae16-1880e9ca269f" />
 </p>
 
 
-# Careless Whisper
+# Careful Whisper
 
-A lightweight, always-on desktop app for local voice-to-text transcription. Lives in the system tray / menu bar, records on a global hotkey, transcribes locally with Whisper, and pastes the result into your focused app. No cloud. No data leaves your machine.
+Careful Whisper is a fork of [Careless Whisper](https://github.com/YarivGilad/careless-whisper) focused on realtime local dictation. It lives in the system tray / menu bar, records from a global hotkey, transcribes locally with Whisper, and keeps your audio on your machine.
 
-Supports **macOS** and **Windows**.
+The original stop-to-transcribe workflow is still here: press the hotkey, speak, press it again, and the final transcript is pasted into your focused app. This fork adds an optional realtime mode that shows partial transcription text in the overlay while you are still recording.
 
-**Website:** [yarivgilad.github.io/careless-whisper](https://yarivgilad.github.io/careless-whisper/)
+No cloud. No accounts. No data leaves your machine.
+
+Supports **macOS**, **Windows**, and Linux builds.
+
+## What Changed In This Fork
+
+- **Realtime transcription mode** - optional partial transcript updates while recording.
+- **Live overlay text** - the recording overlay can show the growing transcript instead of only a timer.
+- **Classic mode preserved** - final transcription and paste still use the reliable batch path.
+- **Local-first experiments** - realtime POC notes, tuning docs, and test scripts are kept in `docs/` and `poc/`.
+
+Realtime mode is experimental. It currently works by transcribing short chunks while capture continues, so it is closer to near-realtime dictation than character-by-character streaming. Batch mode remains the dependable fallback.
+
+**Upstream project:** [YarivGilad/careless-whisper](https://github.com/YarivGilad/careless-whisper)
 
 ## Download
 
-Get the latest version from the [Releases](https://github.com/YarivGilad/careless-whisper/releases/latest) page:
+Get fork builds from this repository's [Releases](https://github.com/BotNexusAI/careful-whisper/releases/latest) page when published.
+
+If you want the upstream app without this fork's realtime changes, download Careless Whisper from [YarivGilad/careless-whisper](https://github.com/YarivGilad/careless-whisper/releases/latest).
 
 | Platform | File |
 |---|---|
@@ -28,32 +43,32 @@ Get the latest version from the [Releases](https://github.com/YarivGilad/careles
 ### macOS
 
 1. Download the `.dmg` file above.
-2. Open it and drag **Careless Whisper** to your **Applications** folder.
+2. Open it and drag **Careful Whisper** to your **Applications** folder.
 3. Launch from Applications (or Spotlight).
 
 > The app has no Dock icon — it lives in the **menu bar** (top-right of your screen).
 
-#### "Careless Whisper is damaged and can't be opened"
+#### "Careful Whisper is damaged and can't be opened"
 
 Don't worry — the app is perfectly fine! macOS shows this warning for apps that aren't code-signed with Apple's $99/year Developer certificate. This is standard for open-source projects that are trying to be given away for free and avoid the Apple penalty for creative generosities. Until this project gets funded (don't hold your breath — it's a weekend side project), macOS users are welcome to run this one-time fix in Terminal:
 
 If you dragged the app to Applications:
 
 ```sh
-xattr -cr "/Applications/Careless Whisper.app"
+xattr -cr "/Applications/Careful Whisper.app"
 ```
 
 If you're running it straight from the DMG:
 
 ```sh
-xattr -cr "/Volumes/Careless Whisper/Careless Whisper.app"
+xattr -cr "/Volumes/Careful Whisper/Careful Whisper.app"
 ```
 
 After that, the app will open normally.
 
 ### Windows
 
-1. Download the installer from the [Releases](https://github.com/yarivgilad/careless-whisper/releases) page.
+1. Download the installer from this fork's [Releases](https://github.com/BotNexusAI/careful-whisper/releases) page.
 2. Run the installer and follow the prompts.
 
 > The app lives in the **system tray** (bottom-right of your screen).
@@ -65,9 +80,9 @@ The Settings window will open automatically because no model is downloaded yet.
 1. Pick a model and click **Download** (the `base` model is a good starting point — ~142 MB, fast).
 2. Wait for the download to finish.
 3. Your OS will ask for **Microphone** access the first time you record — allow it.
-4. **macOS only:** Go to **System Settings → Privacy & Security → Accessibility** and enable Careless Whisper so it can paste text into other apps.
+4. **macOS only:** Go to **System Settings → Privacy & Security → Accessibility** and enable Careful Whisper so it can paste text into other apps.
 
-### Record and transcribe
+### Classic dictation
 
 1. Click into any text field in any app (your target).
 2. Press the hotkey (default: **Cmd+Shift+Space** on macOS, **Ctrl+Shift+Space** on Windows) — a small recording indicator appears.
@@ -75,6 +90,12 @@ The Settings window will open automatically because no model is downloaded yet.
 4. Press the hotkey again to stop — the transcribed text is pasted directly where your cursor was.
 
 The hotkey, language, and other options can be changed from **Settings** in the tray menu.
+
+### Realtime transcription
+
+Enable **Realtime transcription** in Settings to show partial transcript text in the overlay while recording.
+
+Realtime mode is useful for seeing whether the app is hearing you correctly before you stop recording. When you stop, the app still runs the full final transcription path and, if auto-paste is enabled, pastes the completed result into your focused app.
 
 ## Default Hotkey
 
@@ -107,14 +128,14 @@ On first launch the app will prompt you to download a model. Models are stored l
 
 ## Development Docs
 
-The realtime dictation work is tracked separately from the current batch
-transcription app so the POC, plan, and open questions stay discoverable.
+Realtime dictation work is tracked separately so the POC, plan, and open
+questions stay discoverable.
 
 | Path | Purpose |
 |---|---|
 | `docs/realtime_whisper_discussion.md` | Original realtime dictation architecture discussion and feasibility notes. |
-| `docs/realtime_whisper/plan.md` | Phase plan for realtime dictation, starting with the standalone POC. |
-| `docs/realtime_whisper/implementation_tracker.md` | Current status, completed POC work, and next test commands. |
+| `docs/realtime_whisper/plan.md` | Phase plan for realtime dictation, from standalone POC through app integration. |
+| `docs/realtime_whisper/implementation_tracker.md` | POC status, completed realtime experiments, and next test commands. |
 | `docs/realtime_whisper/current_issues.md` | Active risks, resolved findings, and tuning questions. |
 | `poc/README.md` | POC runbook and file map. Start here for local realtime experiments. |
 | `poc/realtime_mic_poc.py` | Continuous/chunked ffmpeg capture runner that invokes local `whisper.cpp`. |
@@ -125,6 +146,13 @@ transcription app so the POC, plan, and open questions stay discoverable.
 
 Generated POC artifacts live under `poc/audio/`, `poc/models/`, and
 `poc/vendor/`; they are documented in `poc/README.md` and ignored by git.
+
+## Contributing Upstream
+
+This fork keeps its product identity as Careful Whisper, but reusable feature
+work should be easy to send back to Careless Whisper. For upstream pull
+requests, branch from `upstream/main` and include only the feature or fix being
+proposed, without fork branding changes.
 
 ## Building from Source
 

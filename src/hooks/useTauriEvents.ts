@@ -5,6 +5,7 @@ export type AppEvent =
   | { type: "recording-started" }
   | { type: "recording-stopped" }
   | { type: "transcription-complete"; text: string }
+  | { type: "realtime-transcription"; text: string; fullText: string }
   | { type: "transcription-error"; message: string }
   | { type: "download-progress"; model: string; percent: number }
   | { type: "hotkey-start" }
@@ -26,6 +27,13 @@ export function useTauriEvents(handler: Handler) {
         listen("recording-stopped", () => onEvent({ type: "recording-stopped" })),
         listen<{ text: string }>("transcription-complete", (e) =>
           onEvent({ type: "transcription-complete", text: e.payload.text })
+        ),
+        listen<{ text: string; full_text: string }>("realtime-transcription", (e) =>
+          onEvent({
+            type: "realtime-transcription",
+            text: e.payload.text,
+            fullText: e.payload.full_text,
+          })
         ),
         listen<{ message: string }>("transcription-error", (e) =>
           onEvent({ type: "transcription-error", message: e.payload.message })

@@ -12,6 +12,7 @@ const MAX_HEIGHT = 16;
 export function Overlay() {
   const [state, setState] = useState<OverlayState>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [partialText, setPartialText] = useState("");
   const [barHeights, setBarHeights] = useState<number[] | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const smoothedLevel = useRef(0);
@@ -21,11 +22,15 @@ export function Overlay() {
     if (event.type === "recording-started") {
       setState("recording");
       setElapsed(0);
+      setPartialText("");
     } else if (event.type === "recording-stopped") {
       setState("transcribing");
       setBarHeights(null);
+    } else if (event.type === "realtime-transcription") {
+      setPartialText(event.fullText);
     } else if (event.type === "transcription-complete") {
       setState("idle");
+      setPartialText("");
     } else if (event.type === "transcription-error") {
       setErrorMsg(event.message);
       setState("error");
@@ -86,18 +91,21 @@ export function Overlay() {
   return (
     <div className="overlay-root">
       {state === "recording" && (
-        <div className="overlay-pill overlay-recording">
-          <span className="recording-dot" />
-          <div className="waveform">
-            {BAR_WEIGHTS.map((_, i) => (
-              <span
-                key={i}
-                className="waveform-bar"
-                style={barHeights ? { height: `${barHeights[i]}px` } : {}}
-              />
-            ))}
+        <div className={`overlay-pill overlay-recording ${partialText ? "overlay-recording-live" : ""}`}>
+          <div className="overlay-row">
+            <span className="recording-dot" />
+            <div className="waveform">
+              {BAR_WEIGHTS.map((_, i) => (
+                <span
+                  key={i}
+                  className="waveform-bar"
+                  style={barHeights ? { height: `${barHeights[i]}px` } : {}}
+                />
+              ))}
+            </div>
+            <span className="overlay-timer">{formatTime(elapsed)}</span>
           </div>
-          <span className="overlay-timer">{formatTime(elapsed)}</span>
+          {partialText && <div className="overlay-partial">{partialText}</div>}
         </div>
       )}
       {state === "transcribing" && (

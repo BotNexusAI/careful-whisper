@@ -139,7 +139,10 @@ pub fn paste_into_target(target: FocusTarget) -> Result<(), String> {
 
         log::info!(
             "[paste] our_thread={}, fg_thread={}, target_thread={}, target_hwnd={}",
-            our_thread, fg_thread, target_thread, target
+            our_thread,
+            fg_thread,
+            target_thread,
+            target
         );
 
         // Attach our thread to the foreground window's thread so we gain
@@ -149,11 +152,12 @@ pub fn paste_into_target(target: FocusTarget) -> Result<(), String> {
         } else {
             false
         };
-        let attached_target = if our_thread != target_thread && target_thread != fg_thread && target_thread != 0 {
-            AttachThreadInput(our_thread, target_thread, true).0 != 0
-        } else {
-            false
-        };
+        let attached_target =
+            if our_thread != target_thread && target_thread != fg_thread && target_thread != 0 {
+                AttachThreadInput(our_thread, target_thread, true).0 != 0
+            } else {
+                false
+            };
 
         // AttachThreadInput above gives us permission to call SetForegroundWindow
         // without the old Alt-key hack (which activated menu bars in apps like Notepad).

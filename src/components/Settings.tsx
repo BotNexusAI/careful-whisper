@@ -16,6 +16,7 @@ interface Settings {
   overlay_position: "top_center" | "bottom_center" | "top_left" | "top_right";
   lower_volume_while_recording: boolean;
   translate_to_english: boolean;
+  realtime_transcription: boolean;
 }
 
 const AUDIO_FILE_FILTERS = [
@@ -308,6 +309,16 @@ export function Settings() {
       </div>
 
       <div className="settings-section">
+        <div className="settings-toggle">
+          <span>Realtime transcription</span>
+          <input
+            type="checkbox"
+            checked={settings.realtime_transcription}
+            onChange={(e) =>
+              setSettings({ ...settings, realtime_transcription: e.target.checked })
+            }
+          />
+        </div>
         <div className="settings-toggle">
           <span>Auto-paste after transcription</span>
           <input

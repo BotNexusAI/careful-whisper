@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
@@ -43,7 +44,12 @@ fn position_overlay(app: &AppHandle, win: &tauri::WebviewWindow, position: &Over
         .iter()
         .find(|m| m.position().x == 0 && m.position().y == 0)
         .map(|m| m.scale_factor())
-        .or_else(|| app.primary_monitor().ok().flatten().map(|m| m.scale_factor()))
+        .or_else(|| {
+            app.primary_monitor()
+                .ok()
+                .flatten()
+                .map(|m| m.scale_factor())
+        })
         .unwrap_or(1.0);
 
     // X-only hit test with a nearest-monitor fallback. Cursor coords can drift
@@ -104,7 +110,7 @@ fn position_overlay(app: &AppHandle, win: &tauri::WebviewWindow, position: &Over
     let screen_h_points = monitor.size().height as f64 / target_scale;
 
     let overlay_w = 320.0;
-    let overlay_h = 80.0;
+    let overlay_h = 120.0;
     let margin = 16.0;
     let top_offset = 40.0;
 
@@ -169,6 +175,21 @@ fn emit_transcription_error(app: &AppHandle, message: impl Into<String>) {
     );
 }
 
+fn emit_realtime_transcription(app: &AppHandle, text: &str, full_text: &str) {
+    let _ = app.emit(
+        "realtime-transcription",
+        serde_json::json!({ "text": text, "full_text": full_text }),
+    );
+}
+
+fn sample_rms(samples: &[f32]) -> f32 {
+    if samples.is_empty() {
+        return 0.0;
+    }
+    let sum: f32 = samples.iter().map(|sample| sample * sample).sum();
+    (sum / samples.len() as f32).sqrt()
+}
+
 fn transcription_inputs(
     state: &State<'_, AppState>,
 ) -> (String, bool, bool, Option<FocusTarget>, String, PathBuf) {
@@ -212,6 +233,7 @@ fn spawn_transcription(
             return;
         }
 
+        let _transcription_guard = state.transcription_lock.lock().unwrap();
         let ctx = state.whisper_ctx.lock().unwrap().take();
         let ctx = match ctx {
             Some(context) => context,
@@ -227,12 +249,21 @@ fn spawn_transcription(
             },
         };
 
-        let result = crate::transcribe::whisper::transcribe(&ctx, &samples_16k, &language, translate_to_english);
+        let result = crate::transcribe::whisper::transcribe(
+            &ctx,
+            &samples_16k,
+            &language,
+            translate_to_english,
+        );
         *state.whisper_ctx.lock().unwrap() = Some(ctx);
 
         match result {
             Ok(ref text) => {
-                log::info!("[transcribe] result ({} chars): {:?}", text.len(), &text[..text.len().min(100)]);
+                log::info!(
+                    "[transcribe] result ({} chars): {:?}",
+                    text.len(),
+                    &text[..text.len().min(100)]
+                );
 
                 // Save the user's clipboard before overwriting it
                 let previous_clipboard = crate::output::clipboard::read_clipboard();
@@ -286,6 +317,127 @@ fn spawn_transcription(
     });
 }
 
+fn transcribe_realtime_chunk(
+    app: &AppHandle,
+    samples_16k: &[f32],
+    language: &str,
+    translate_to_english: bool,
+    active_model: &str,
+    model_path: &PathBuf,
+) -> Result<String, String> {
+    let state = app.state::<AppState>();
+    let _transcription_guard = state.transcription_lock.lock().unwrap();
+
+    downloader::validate_model_file(active_model)?;
+
+    let ctx = state.whisper_ctx.lock().unwrap().take();
+    let ctx = match ctx {
+        Some(context) => context,
+        None => crate::transcribe::whisper::load_model(model_path)?,
+    };
+
+    let result =
+        crate::transcribe::whisper::transcribe(&ctx, samples_16k, language, translate_to_english);
+    *state.whisper_ctx.lock().unwrap() = Some(ctx);
+    result
+}
+
+fn spawn_realtime_transcription_worker(
+    app: AppHandle,
+    active: Arc<AtomicBool>,
+    samples: Arc<Mutex<Vec<f32>>>,
+    sample_rate: u32,
+    channels: u16,
+    settings: Settings,
+) {
+    std::thread::spawn(move || {
+        const CHUNK_SECONDS: f32 = 4.0;
+        const POLL_MS: u64 = 500;
+        const MIN_RMS: f32 = 0.003;
+
+        let channels_usize = channels as usize;
+        let raw_chunk_len = (sample_rate as f32 * channels as f32 * CHUNK_SECONDS).round() as usize;
+        let model_path = downloader::model_path(&settings.active_model);
+        let mut next_sample_index = 0usize;
+        let mut full_text = String::new();
+
+        log::info!(
+            "[realtime] worker started: chunk={:.1}s, model='{}', language='{}', rate={}, channels={}",
+            CHUNK_SECONDS,
+            settings.active_model,
+            settings.language,
+            sample_rate,
+            channels
+        );
+
+        while active.load(Ordering::Relaxed) {
+            std::thread::sleep(Duration::from_millis(POLL_MS));
+
+            let raw_samples = {
+                let buf = samples.lock().unwrap();
+                let available = buf.len().saturating_sub(next_sample_index);
+                if available < raw_chunk_len {
+                    continue;
+                }
+                let end = buf.len();
+                let chunk = buf[next_sample_index..end].to_vec();
+                next_sample_index = end;
+                chunk
+            };
+
+            if sample_rms(&raw_samples) < MIN_RMS {
+                log::debug!("[realtime] skipping quiet chunk");
+                continue;
+            }
+
+            let samples_16k = match crate::audio::resample::resample_to_16k(
+                raw_samples,
+                sample_rate,
+                channels_usize,
+            ) {
+                Ok(samples) => samples,
+                Err(error) => {
+                    log::warn!("[realtime] resample failed: {}", error);
+                    emit_transcription_error(&app, format!("Realtime resample error: {}", error));
+                    continue;
+                }
+            };
+
+            let duration_secs = samples_16k.len() as f32 / 16_000.0;
+            log::info!("[realtime] transcribing {:.1}s chunk", duration_secs);
+
+            match transcribe_realtime_chunk(
+                &app,
+                &samples_16k,
+                &settings.language,
+                settings.translate_to_english,
+                &settings.active_model,
+                &model_path,
+            ) {
+                Ok(text) if !text.trim().is_empty() => {
+                    let text = text.trim().to_string();
+                    if !full_text.is_empty() {
+                        full_text.push(' ');
+                    }
+                    full_text.push_str(&text);
+                    log::info!("[realtime] partial: {:?}", text);
+                    emit_realtime_transcription(&app, &text, &full_text);
+                }
+                Ok(_) => {}
+                Err(error) => {
+                    log::warn!("[realtime] transcription failed: {}", error);
+                    emit_transcription_error(
+                        &app,
+                        format!("Realtime transcription error: {}", error),
+                    );
+                }
+            }
+        }
+
+        log::info!("[realtime] worker stopped");
+    });
+}
+
 #[tauri::command]
 pub async fn start_recording(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     let settings = state.settings.lock().unwrap().clone();
@@ -304,6 +456,9 @@ pub async fn start_recording(app: AppHandle, state: State<'_, AppState>) -> Resu
 
     let handle = crate::audio::capture::start_capture(settings.max_recording_seconds)?;
     let current_level = handle.current_level.clone();
+    let realtime_samples = handle.samples.clone();
+    let realtime_sample_rate = handle.sample_rate;
+    let realtime_channels = handle.channels;
     *state.recording.lock().unwrap() = Some(handle);
 
     if let Some(win) = app.get_webview_window("overlay") {
@@ -333,6 +488,22 @@ pub async fn start_recording(app: AppHandle, state: State<'_, AppState>) -> Resu
         }
     });
 
+    if settings.realtime_transcription {
+        if let Some(active) = state.realtime_worker_active.lock().unwrap().take() {
+            active.store(false, Ordering::Relaxed);
+        }
+        let realtime_active = Arc::new(AtomicBool::new(true));
+        *state.realtime_worker_active.lock().unwrap() = Some(realtime_active.clone());
+        spawn_realtime_transcription_worker(
+            app.clone(),
+            realtime_active,
+            realtime_samples,
+            realtime_sample_rate,
+            realtime_channels,
+            settings.clone(),
+        );
+    }
+
     app.emit("recording-started", ())
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -342,6 +513,9 @@ pub async fn start_recording(app: AppHandle, state: State<'_, AppState>) -> Resu
 pub async fn stop_recording(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     // Stop the audio level emitter
     if let Some(active) = state.level_emitter_active.lock().unwrap().take() {
+        active.store(false, Ordering::Relaxed);
+    }
+    if let Some(active) = state.realtime_worker_active.lock().unwrap().take() {
         active.store(false, Ordering::Relaxed);
     }
 

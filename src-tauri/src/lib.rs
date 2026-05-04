@@ -16,10 +16,12 @@ use tauri::{Emitter, Manager};
 pub struct AppState {
     pub settings: Mutex<Settings>,
     pub whisper_ctx: Mutex<Option<whisper_rs::WhisperContext>>,
+    pub transcription_lock: Mutex<()>,
     pub recording: Mutex<Option<audio::capture::RecordingHandle>>,
     pub target_focus: Mutex<Option<FocusTarget>>,
     pub original_volume: Mutex<Option<f32>>,
     pub level_emitter_active: Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
+    pub realtime_worker_active: Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
 }
 
 /// macOS: Checks if the app has Accessibility permission.
@@ -335,9 +337,20 @@ fn init_logging() {
 pub fn run() {
     init_logging();
     log::info!("=== Careless Whisper starting ===");
-    log::info!("[system] version={}, os={}, arch={}", env!("CARGO_PKG_VERSION"), std::env::consts::OS, std::env::consts::ARCH);
+    log::info!(
+        "[system] version={}, os={}, arch={}",
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    );
     let settings = Settings::load();
-    log::info!("[settings] model='{}', language='{}', hotkey='{}', mode={:?}", settings.active_model, settings.language, settings.hotkey, settings.recording_mode);
+    log::info!(
+        "[settings] model='{}', language='{}', hotkey='{}', mode={:?}",
+        settings.active_model,
+        settings.language,
+        settings.hotkey,
+        settings.recording_mode
+    );
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -350,10 +363,12 @@ pub fn run() {
         .manage(AppState {
             settings: Mutex::new(settings),
             whisper_ctx: Mutex::new(None),
+            transcription_lock: Mutex::new(()),
             recording: Mutex::new(None),
             target_focus: Mutex::new(None),
             original_volume: Mutex::new(None),
             level_emitter_active: Mutex::new(None),
+            realtime_worker_active: Mutex::new(None),
         })
         .setup(|app| {
             #[cfg(target_os = "macos")]

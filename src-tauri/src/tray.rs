@@ -53,7 +53,8 @@ fn build_tray_menu<R: Runtime>(app: &AppHandle<R>, current_lang: &str) -> tauri:
         .iter()
         .map(|item| item as &dyn IsMenuItem<R>)
         .collect();
-    let language_submenu = Submenu::with_id_and_items(app, "language", "Language", true, &lang_refs)?;
+    let language_submenu =
+        Submenu::with_id_and_items(app, "language", "Language", true, &lang_refs)?;
 
     Menu::with_items(app, &[&settings, &language_submenu, &sep, &quit])
 }
@@ -84,10 +85,7 @@ fn change_language<R: Runtime>(app: &AppHandle<R>, code: &str) {
         Err(e) => log::warn!("[tray] failed to rebuild menu: {}", e),
     }
 
-    let _ = app.emit(
-        "settings-updated",
-        serde_json::json!({ "language": code }),
-    );
+    let _ = app.emit("settings-updated", serde_json::json!({ "language": code }));
 }
 
 pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
