@@ -64,9 +64,9 @@ export function Settings() {
       setRecording(true);
       setFinalizingRecording(false);
     });
-    const unlistenRecordingStopped = listen("recording-stopped", () => {
+    const unlistenRecordingStopped = listen<{ finalizing?: boolean }>("recording-stopped", (e) => {
       setRecording(false);
-      setFinalizingRecording(true);
+      setFinalizingRecording(e.payload?.finalizing ?? true);
     });
     const unlistenSettingsUpdated = listen("settings-updated", () => {
       void invoke<Settings>("get_settings").then(setSettings);
@@ -167,7 +167,7 @@ export function Settings() {
       if (recording) {
         await invoke("stop_recording");
       } else {
-        await invoke("start_recording_from_settings");
+        await invoke("start_recording_from_settings_with_target_delay");
       }
     } catch (error) {
       setRecording(false);
@@ -239,6 +239,9 @@ export function Settings() {
       <div className="settings-section recording-control">
         <div>
           <label className="settings-label">Recording</label>
+          <div className="recording-helper">
+            The hotkey starts immediately. The button hides Settings first; focus the target field when it closes.
+          </div>
           <div className="recording-mode-row">
             <button
               type="button"
@@ -259,6 +262,7 @@ export function Settings() {
           className={recording ? "btn-danger" : "btn-primary"}
           onClick={() => void toggleRecording()}
           disabled={finalizingRecording}
+          title="Starts after Settings hides; focus the destination field when it closes."
         >
           {recording ? "Stop Recording" : finalizingRecording ? "Transcribing..." : "Start Recording"}
         </button>

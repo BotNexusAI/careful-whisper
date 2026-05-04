@@ -22,6 +22,8 @@ pub struct AppState {
     pub original_volume: Mutex<Option<f32>>,
     pub level_emitter_active: Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
     pub realtime_worker_active: Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
+    pub realtime_used_in_recording: Mutex<bool>,
+    pub realtime_output_seen: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// macOS: Checks if the app has Accessibility permission.
@@ -369,6 +371,8 @@ pub fn run() {
             original_volume: Mutex::new(None),
             level_emitter_active: Mutex::new(None),
             realtime_worker_active: Mutex::new(None),
+            realtime_used_in_recording: Mutex::new(false),
+            realtime_output_seen: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         })
         .setup(|app| {
             #[cfg(target_os = "macos")]
@@ -442,6 +446,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             start_recording,
             start_recording_from_settings,
+            start_recording_from_settings_with_target_delay,
             stop_recording,
             transcribe_audio_file,
             get_settings,

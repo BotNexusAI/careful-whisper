@@ -2,8 +2,13 @@ import { useEffect, useEffectEvent } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export type AppEvent =
-  | { type: "recording-started"; realtime: boolean }
-  | { type: "recording-stopped" }
+  | {
+      type: "recording-started";
+      realtime: boolean;
+      autoPaste: boolean;
+      targetCaptured: boolean;
+    }
+  | { type: "recording-stopped"; finalizing: boolean; realtime: boolean }
   | { type: "transcription-complete"; text: string }
   | { type: "realtime-transcription"; text: string; fullText: string }
   | { type: "realtime-mode-updated"; armed: boolean; active: boolean }
@@ -24,10 +29,23 @@ export function useTauriEvents(handler: Handler) {
 
     const setup = async () => {
       const subscriptions = await Promise.all([
-        listen<{ realtime?: boolean }>("recording-started", (e) =>
-          onEvent({ type: "recording-started", realtime: Boolean(e.payload?.realtime) })
+        listen<{ realtime?: boolean; auto_paste?: boolean; target_captured?: boolean }>(
+          "recording-started",
+          (e) =>
+            onEvent({
+              type: "recording-started",
+              realtime: Boolean(e.payload?.realtime),
+              autoPaste: Boolean(e.payload?.auto_paste),
+              targetCaptured: Boolean(e.payload?.target_captured),
+            })
         ),
-        listen("recording-stopped", () => onEvent({ type: "recording-stopped" })),
+        listen<{ finalizing?: boolean; realtime?: boolean }>("recording-stopped", (e) =>
+          onEvent({
+            type: "recording-stopped",
+            finalizing: e.payload?.finalizing ?? true,
+            realtime: Boolean(e.payload?.realtime),
+          })
+        ),
         listen<{ text: string }>("transcription-complete", (e) =>
           onEvent({ type: "transcription-complete", text: e.payload.text })
         ),

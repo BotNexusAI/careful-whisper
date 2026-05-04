@@ -16,6 +16,8 @@ export function Overlay() {
   const [partialText, setPartialText] = useState("");
   const [realtimeActive, setRealtimeActive] = useState(false);
   const [realtimeArmed, setRealtimeArmed] = useState(false);
+  const [autoPaste, setAutoPaste] = useState(false);
+  const [targetCaptured, setTargetCaptured] = useState(false);
   const [realtimeChanging, setRealtimeChanging] = useState(false);
   const [barHeights, setBarHeights] = useState<number[] | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -29,9 +31,15 @@ export function Overlay() {
       setPartialText("");
       setRealtimeActive(event.realtime);
       setRealtimeArmed(event.realtime);
+      setAutoPaste(event.autoPaste);
+      setTargetCaptured(event.targetCaptured);
     } else if (event.type === "recording-stopped") {
-      setState("transcribing");
+      setState(event.finalizing ? "transcribing" : "idle");
       setBarHeights(null);
+      if (!event.finalizing) {
+        setPartialText("");
+        setRealtimeActive(false);
+      }
     } else if (event.type === "realtime-transcription") {
       setPartialText(event.fullText);
     } else if (event.type === "realtime-mode-updated") {
@@ -150,6 +158,15 @@ export function Overlay() {
               }`}
             >
               {realtimeActive ? "Realtime" : realtimeArmed ? "Armed" : "Batch"}
+            </span>
+            <span
+              className={`overlay-target-badge ${
+                autoPaste && targetCaptured
+                  ? "overlay-target-badge-ready"
+                  : "overlay-target-badge-muted"
+              }`}
+            >
+              {autoPaste ? (targetCaptured ? "Typing" : "No target") : "Paste off"}
             </span>
             <button
               className="overlay-mode-toggle"

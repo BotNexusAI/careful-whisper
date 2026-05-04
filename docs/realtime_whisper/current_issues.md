@@ -7,14 +7,15 @@ effort. Keep it short and current.
 
 ### App Prototype Needs Live Validation
 
-The Rust/Tauri realtime prototype is wired in, but it has not yet been tested
-through the actual app UI with microphone permission, the overlay window, and
-the final paste path together.
+The Rust/Tauri realtime prototype is wired in, but it still needs more real app
+testing with microphone permission, the overlay window, captured target focus,
+live chunk paste, and stop behavior together.
 
 Next action: run the app, enable **Realtime transcription** and **Auto-paste
 after transcription**, start from a focused text field with the global hotkey,
 record the English control paragraph from `poc/test_samples.md`, and compare
-overlay partials, live pasted chunks, and the final batch transcript.
+overlay partials, live pasted chunks, and whether stop exits cleanly without a
+second batch transcription pass after at least one live chunk appears.
 
 ### Continuous Runner Latency Is Still Noticeable
 
@@ -170,12 +171,14 @@ replace behavior.
 
 ### Settings Start Has No External Text Target
 
-The Settings **Start Recording** button clears `target_focus`, so it cannot type
-into the app where the user previously had a cursor. This is intentional because
-clicking Settings changes the focused app to Settings itself.
+The Settings **Start Recording** button used to clear `target_focus`, so it
+could not type into the app where the user previously had a cursor. Clicking
+Settings changes the focused app to Settings itself, so immediate target capture
+from that button is not useful.
 
-Next action: use the global hotkey for real insertion tests. If product UX needs
-a mouse-only start path later, it needs an explicit target-selection design.
+Resolution: the button now hides Settings, waits briefly, captures the newly
+focused frontmost app, and then starts recording. The hotkey remains the most
+reliable start path.
 
 ### VAD Is Deferred
 
@@ -191,5 +194,6 @@ opt-in settings flag and overlay-only partial text, not as a replacement for the
 existing stop-then-transcribe behavior.
 
 Resolution: batch mode remains the default fallback. In realtime mode,
-auto-paste inserts live chunks during recording and the final transcript is
-copied to the clipboard without being pasted a second time.
+auto-paste inserts live chunks during recording. Stop skips the final batch
+transcription pass after realtime has produced user-visible output; very short
+recordings fall back to the final pass if no live chunk returned.

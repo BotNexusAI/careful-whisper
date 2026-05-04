@@ -63,6 +63,7 @@ body {
 }
 
 .overlay-mode-badge,
+.overlay-target-badge,
 .overlay-mode-toggle {
   display: inline-flex;
   align-items: center;
@@ -77,7 +78,8 @@ body {
   white-space: nowrap;
 }
 
-.overlay-mode-badge {
+.overlay-mode-badge,
+.overlay-target-badge {
   padding: 0 6px;
 }
 
@@ -91,6 +93,18 @@ body {
   background: rgba(142, 142, 147, 0.14);
   border: 1px solid rgba(142, 142, 147, 0.4);
   color: #d1d1d6;
+}
+
+.overlay-target-badge-ready {
+  background: rgba(10, 132, 255, 0.18);
+  border: 1px solid rgba(10, 132, 255, 0.55);
+  color: #dbeafe;
+}
+
+.overlay-target-badge-muted {
+  background: rgba(255, 159, 10, 0.14);
+  border: 1px solid rgba(255, 159, 10, 0.4);
+  color: #ffe8b5;
 }
 
 .overlay-mode-badge-live::before {
@@ -279,6 +293,13 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.recording-helper {
+  margin: 0 0 8px;
+  color: #8e8e93;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .mode-pill {

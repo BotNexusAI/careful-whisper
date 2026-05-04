@@ -10,7 +10,7 @@ POC entry point: `poc/realtime_mic_poc.py`
 | --- | --- | --- | --- |
 | Phase 1 - Standalone POC | Complete enough | Mic capture works with `--device ':1'`; continuous capture produces usable English transcription; the runner prints timing/audio levels and a final transcript. | Keep using it as the baseline while testing latency improvements. |
 | Phase 2 - POC hardening | Started | Continuous capture fixed the capture-gap word-loss issue; remaining problems are latency and minor duplicate/substituted words. | Continue latency tuning in parallel with app validation. |
-| Phase 3 - App prototype | Implemented, needs live validation | The Tauri app has an opt-in realtime worker, partial transcript events, overlay display, live chunk paste behind Auto-paste, and clean shutdown on stop. | Run the app, enable Realtime transcription, and compare overlay partials, live pasted chunks, and the final batch transcript. |
+| Phase 3 - App prototype | Implemented, needs live validation | The Tauri app has an opt-in realtime worker, partial transcript events, overlay display, live chunk paste behind Auto-paste, and clean realtime shutdown on stop without the old final batch pass once live text has been produced. | Run the app, enable Realtime transcription, and compare overlay partials, live pasted chunks, and stop behavior. |
 | Phase 4 - Stabilized output | Started | Realtime paste commits whole chunk text without overlap/deduplication or stable-prefix logic. | Test whether naive chunk commits are acceptable before adding overlap and dedupe. |
 | Phase 5 - Productization | Started lightly | Settings has a realtime arm/disable control and the recording bubble exposes the current mode, but defaults, tuning, and edge-case UX are not productized. | Defer deeper product work until the live prototype proves useful. |
 
@@ -80,11 +80,9 @@ POC entry point: `poc/realtime_mic_poc.py`
 - Added an opt-in Rust realtime transcription worker that reads from the active
   capture buffer while recording, transcribes 4-second chunks through the
   existing local Whisper model, and emits `realtime-transcription` events.
-- Added a shared transcription lock so realtime chunks and the final batch
-  transcript do not use the same Whisper context concurrently.
-- Updated the overlay to show accumulated partial text while recording. Stopping
-  still runs the final batch transcription path, and auto-paste remains final
-  transcript only.
+- Added a shared transcription lock so concurrent Whisper work cannot reuse the
+  same context unsafely.
+- Updated the overlay to show accumulated partial text while recording.
 - Increased the overlay window height to fit the partial text prototype.
 - Verified `cargo check --manifest-path src-tauri/Cargo.toml` passes after the
   Rust integration.
@@ -102,15 +100,27 @@ POC entry point: `poc/realtime_mic_poc.py`
   captured paste target, so they are safe for testing the overlay but do not
   live-paste into a stale app target.
 - Added live chunk paste for realtime mode. It is gated by **Auto-paste after
-  transcription** and uses the captured hotkey target; realtime finalization
-  still copies the full final transcript to the clipboard but skips the old
-  final paste to avoid duplicate insertion.
+  transcription** and uses the captured hotkey target; realtime stop now skips
+  the old final batch transcription pass to avoid duplicate work and duplicate
+  output once at least one live chunk has been produced. Very short recordings
+  still fall back to the final batch path if no realtime output arrived before
+  stop.
 - Switched macOS target output from clipboard-plus-Cmd+V to Unicode keyboard
   events for the captured target PID. Clipboard is now a fallback when no target
   was captured or typing fails.
 - Added realtime arm/disable controls in the Settings recording section and in
   the recording bubble. Toggling realtime while recording starts or stops the
   realtime worker for the active session.
+- Added a `Typing` / `No target` / `Paste off` badge to the recording bubble so
+  both hotkey and button starts expose whether cursor insertion can happen.
+- Changed the Settings Start button to hide Settings, wait briefly, capture the
+  newly focused target, and then start recording. This gives the mouse path a
+  real way to type into another app.
+- Fixed overlay positioning on external monitors by positioning in physical
+  monitor coordinates with the target monitor's scale factor instead of doubling
+  external-monitor origins by the primary display scale.
+- Fixed Unicode log preview truncation so Hebrew final transcripts cannot panic
+  by slicing inside a multibyte character.
 - Disabled incremental compilation for the optimized Rust dev profile after the
   exact Tauri dev command (`--no-default-features --features metal`) reproduced
   intermittent macOS arm64 linker failures that disappeared with
@@ -130,9 +140,10 @@ into a text field and start recording with the global hotkey. Read the English
 control paragraph from `poc/test_samples.md`. Watch whether partial text appears
 in the overlay, whether chunks are inserted into the target app during
 recording, and whether stopping avoids a duplicate final paste. If recording is
-started from the Settings button, the target is intentionally `None`, so the app
-will not type into another app. The current local config was last observed as
-`language='he'`, so do not skip the language setting when testing English.
+started from the Settings button, Settings hides briefly; focus the destination
+field before capture begins so the app has a target. The current local config was
+last observed as `language='he'`, so do not skip the language setting when
+testing English.
 
 POC comparison commands:
 
