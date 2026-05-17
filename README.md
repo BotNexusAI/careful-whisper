@@ -111,6 +111,11 @@ When you stop, realtime mode skips the old full batch transcription path because
 the text was already produced during recording. Very short realtime recordings
 that stop before any chunk returns fall back to the classic final pass.
 
+Platform note: realtime capture and Whisper chunking are cross-platform Rust
+paths, but the direct live-typing path is currently macOS-specific. Windows and
+Linux keep the clipboard-plus-paste fallback for realtime chunks and need
+dedicated QA before claiming parity, especially on Linux Wayland sessions.
+
 ## Default Hotkey
 
 `Cmd+Shift+Space` (macOS) / `Ctrl+Shift+Space` (Windows) — press to start recording, press again to stop, transcribe, and paste.
@@ -152,6 +157,7 @@ questions stay discoverable.
 | `docs/realtime_whisper/plan.md` | Phase plan for realtime dictation, from standalone POC through app integration. |
 | `docs/realtime_whisper/implementation_tracker.md` | POC status, completed realtime experiments, and next test commands. |
 | `docs/realtime_whisper/current_issues.md` | Active risks, resolved findings, and tuning questions. |
+| `docs/realtime_whisper/upstream_pr_notes.md` | PR-ready scope, platform notes, and verification checklist for sending reusable realtime work upstream. |
 | `poc/README.md` | POC runbook and file map. Start here for local realtime experiments. |
 | `poc/realtime_mic_poc.py` | Continuous/chunked ffmpeg capture runner that invokes local `whisper.cpp`. |
 | `poc/run_whisper_stream.sh` | Wrapper for the `whisper-stream` comparison path. |

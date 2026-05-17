@@ -17,6 +17,14 @@ Initial v1 release notes for the realtime dictation branch.
 - Added a realtime POC workspace with scripts, read-aloud samples, and tracking docs.
 - Improved tray behavior: left-click opens Settings, secondary-click opens the app menu.
 
+### Platform Support
+
+- Core realtime audio capture, resampling, and Whisper chunk transcription use cross-platform Rust/Tauri paths and are intended to build on macOS, Windows, and Linux.
+- macOS is the validated realtime path for this branch. Live output uses direct Unicode keyboard events and requires Accessibility permission.
+- Windows and Linux currently keep the clipboard-plus-paste fallback for realtime chunks and need dedicated QA before claiming parity with macOS live typing.
+- Linux paste behavior depends on the desktop session and helper tools (`xdotool`, `ydotool`, or `wtype`), so Wayland/X11 behavior should be tested per distro/compositor.
+- Windows/Linux builds should disable the default Metal feature unless feature defaults are changed upstream.
+
 ### Fixes
 
 - Skipped final batch transcription after realtime output already exists.
