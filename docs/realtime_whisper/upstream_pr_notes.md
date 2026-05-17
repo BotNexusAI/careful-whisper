@@ -3,15 +3,15 @@
 Target repository: `YarivGilad/careless-whisper`
 
 These notes are for preparing a clean upstream pull request from the realtime
-dictation work. The current fork branch includes product identity and release
-metadata changes, so the upstream PR should be scoped deliberately.
+dictation work. Keep the upstream PR scoped deliberately so it is easy to
+review as feature work rather than a product or release reset.
 
 ## Recommended Scope
 
 - Include the reusable realtime transcription path, overlay/status UI, settings
   controls, and app-flow fixes.
-- Exclude fork-only branding, website copy, and release-channel wording unless
-  upstream explicitly wants those changes.
+- Exclude fork-only website copy, release-channel wording, and local planning
+  notes unless upstream explicitly wants those changes.
 - Treat the `1.0.0` version bump as a maintainer decision. Keep it out of the
   upstream PR if the PR is intended to be feature-only.
 - Include the platform support notes from `CHANGELOG.md` in the PR description
@@ -53,4 +53,3 @@ live output has already been produced.
   cursor insertion.
 - Manual Windows/Linux follow-up: validate focus capture, chunk insertion,
   clipboard side effects, tray behavior, and overlay visibility.
-
